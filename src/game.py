@@ -79,11 +79,14 @@ class Game:
     def check_for_winner(self):
         """
         Checks if there is a winner and updates the self.winner attribute.
+        The game ends when:
+        1. A player has no pieces left (all captured), OR
+        2. A player has no valid moves available (blocked/stalemate)
         """
         red_pieces = 0
         black_pieces = 0
-        red_moves = 0
-        black_moves = 0
+        red_has_moves = False
+        black_has_moves = False
 
         for r in range(8):
             for c in range(8):
@@ -91,16 +94,19 @@ class Game:
                 if piece:
                     if piece.color == 'red':
                         red_pieces += 1
-                        if self.board.get_valid_moves(piece, r, c):
-                            red_moves += 1
+                        # Check if this piece has any valid moves
+                        if not red_has_moves and self.board.get_valid_moves(piece, r, c):
+                            red_has_moves = True
                     else:
                         black_pieces += 1
-                        if self.board.get_valid_moves(piece, r, c):
-                            black_moves += 1
-        
-        if red_pieces == 0 or red_moves == 0:
+                        # Check if this piece has any valid moves
+                        if not black_has_moves and self.board.get_valid_moves(piece, r, c):
+                            black_has_moves = True
+
+        # Game ends if a color has no pieces OR has pieces but no valid moves
+        if red_pieces == 0 or not red_has_moves:
             self.winner = 'black'
-        elif black_pieces == 0 or black_moves == 0:
+        elif black_pieces == 0 or not black_has_moves:
             self.winner = 'red'
 
     def is_over(self):
