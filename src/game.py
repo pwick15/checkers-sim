@@ -4,13 +4,17 @@ class Game:
     """
     Manages the game state, player turns, and win/loss conditions.
     """
-    def __init__(self):
+    def __init__(self, silent=False):
         """
         Initializes a new game.
+
+        Args:
+            silent (bool): If True, suppress error messages (useful for bot simulations)
         """
         self.board = Board()
         self.current_turn = 'red'  # Red starts
         self.winner = None
+        self.silent = silent
 
     def switch_turn(self):
         """
@@ -39,28 +43,32 @@ class Game:
 
         # Basic validation
         if piece is None:
-            print("Error: No piece at the starting position.")
+            if not self.silent:
+                print("Error: No piece at the starting position.")
             return False
         if piece.color != self.current_turn:
-            print(f"Error: It's {self.current_turn}'s turn.")
+            if not self.silent:
+                print(f"Error: It's {self.current_turn}'s turn.")
             return False
 
         valid_moves = self.board.get_valid_moves(piece, start_row, start_col)
-        
+
         # Check if the move is a capture
         capture_moves = {move: captured for move, captured in valid_moves.items() if captured is not None}
-        
+
         if capture_moves:
             if end_pos not in capture_moves:
-                print("Error: You must make a capture.")
+                if not self.silent:
+                    print("Error: You must make a capture.")
                 return False
         elif end_pos not in valid_moves:
-            print("Error: Invalid move.")
+            if not self.silent:
+                print("Error: Invalid move.")
             return False
 
         # If we are here, the move is valid
         self.board.move_piece(start_row, start_col, end_row, end_col)
-        
+
         # Check for a winner
         self.check_for_winner()
 
@@ -70,7 +78,8 @@ class Game:
             if new_piece:
                 further_captures = self.board.get_valid_moves(new_piece, end_row, end_col)
                 if any(v is not None for v in further_captures.values()):
-                    print("Another capture is available. Your turn continues.")
+                    if not self.silent:
+                        print("Another capture is available. Your turn continues.")
                     return True # Turn continues
 
         self.switch_turn()
