@@ -20,6 +20,7 @@ WOOD = (139, 69, 19)
 class CheckersUI:
     def __init__(self):
         pygame.init()
+        pygame.font.init()
         self.win = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption('Checkers Simulator')
         self.game = Game()
@@ -27,6 +28,9 @@ class CheckersUI:
         self.selected_pos = None # (row, col)
         self.dragging = False
         self.drag_pos = None # (x, y)
+        self.state = 'START' # START, PLAYING, GAME_OVER
+        self.font_large = pygame.font.SysFont('comicsans', 80)
+        self.font_small = pygame.font.SysFont('comicsans', 40)
 
     def get_row_col_from_mouse(self, pos):
         x, y = pos
@@ -62,6 +66,20 @@ class CheckersUI:
         if piece.is_king:
             pygame.draw.circle(self.win, (255, 215, 0), (x, y), radius // 2) # Gold center for king
 
+    def draw_message(self, text, subtext=None):
+        # Draw semi-transparent background
+        s = pygame.Surface((WIDTH, HEIGHT))
+        s.set_alpha(200)
+        s.fill(WHITE)
+        self.win.blit(s, (0,0))
+        
+        text_surface = self.font_large.render(text, 1, BLACK)
+        self.win.blit(text_surface, (WIDTH/2 - text_surface.get_width()/2, HEIGHT/2 - text_surface.get_height()/2 - 50))
+        
+        if subtext:
+            subtext_surface = self.font_small.render(subtext, 1, BLACK)
+            self.win.blit(subtext_surface, (WIDTH/2 - subtext_surface.get_width()/2, HEIGHT/2 + 20))
+
     def draw(self):
         self.draw_squares()
         self.draw_pieces()
@@ -70,6 +88,12 @@ class CheckersUI:
         if self.dragging and self.selected_piece:
              x, y = self.drag_pos
              self.draw_single_piece(self.selected_piece, 0, 0, x, y)
+        
+        if self.state == 'START':
+            self.draw_message("Checkers", "Press any key to start")
+        elif self.state == 'GAME_OVER':
+            winner = "Red" if self.game.winner == 'red' else "Black"
+            self.draw_message(f"{winner} Wins!", "Press any key to restart")
              
         pygame.display.update()
 
@@ -84,41 +108,50 @@ class CheckersUI:
                 if event.type == pygame.QUIT:
                     run = False
                 
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    pos = pygame.mouse.get_pos()
-                    row, col = self.get_row_col_from_mouse(pos)
-                    piece = self.game.board.get_piece(row, col)
-                    
-                    if piece and piece.color == self.game.current_turn:
-                        self.selected_piece = piece
-                        self.selected_pos = (row, col)
-                        self.dragging = True
-                        self.drag_pos = pos
+                if self.state == 'START':
+                    if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                        self.state = 'PLAYING'
+                
+                elif self.state == 'GAME_OVER':
+                    if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                        self.game = Game() # Reset game
+                        self.state = 'PLAYING'
 
-                elif event.type == pygame.MOUSEMOTION:
-                    if self.dragging:
-                        self.drag_pos = pygame.mouse.get_pos()
-
-                elif event.type == pygame.MOUSEBUTTONUP:
-                    if self.dragging:
+                elif self.state == 'PLAYING':
+                    if event.type == pygame.MOUSEBUTTONDOWN:
                         pos = pygame.mouse.get_pos()
                         row, col = self.get_row_col_from_mouse(pos)
+                        piece = self.game.board.get_piece(row, col)
                         
-                        # Try to move
-                        if self.selected_pos:
-                            # Only attempt move if destination is different
-                            if (row, col) != self.selected_pos:
-                                self.game.play_move(self.selected_pos, (row, col))
-                        
-                        self.selected_piece = None
-                        self.selected_pos = None
-                        self.dragging = False
+                        if piece and piece.color == self.game.current_turn:
+                            self.selected_piece = piece
+                            self.selected_pos = (row, col)
+                            self.dragging = True
+                            self.drag_pos = pos
+
+                    elif event.type == pygame.MOUSEMOTION:
+                        if self.dragging:
+                            self.drag_pos = pygame.mouse.get_pos()
+
+                    elif event.type == pygame.MOUSEBUTTONUP:
+                        if self.dragging:
+                            pos = pygame.mouse.get_pos()
+                            row, col = self.get_row_col_from_mouse(pos)
+                            
+                            # Try to move
+                            if self.selected_pos:
+                                # Only attempt move if destination is different
+                                if (row, col) != self.selected_pos:
+                                    self.game.play_move(self.selected_pos, (row, col))
+                            
+                            self.selected_piece = None
+                            self.selected_pos = None
+                            self.dragging = False
+                            
+                            if self.game.is_over():
+                                self.state = 'GAME_OVER'
 
             self.draw()
-            
-            if self.game.is_over():
-                print(f"Winner: {self.game.winner}")
-                # Could add a game over screen here
         
         pygame.quit()
         sys.exit()
