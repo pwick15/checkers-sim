@@ -6,6 +6,8 @@ packaging==25.0
     # via pytest
 pluggy==1.6.0
     # via pytest
+pygame==2.6.1
+    # via -r requirements.in
 pygments==2.19.2
     # via pytest
 pytest==9.0.1
