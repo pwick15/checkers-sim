@@ -60,8 +60,38 @@ class CheckersUI:
         self.bot = None
         self.bot_thinking = False
 
+        # Move trail tracking
+        self.last_move_from = None  # (row, col)
+        self.last_move_to = None    # (row, col)
+
         # Menu buttons
         self.menu_buttons = self.create_menu_buttons()
+
+    def pos_to_notation(self, row, col):
+        """Convert (row, col) to checkers notation (1-32)."""
+        # Only dark squares are numbered
+        # Starting from top-left (row 0), going left to right
+        if (row + col) % 2 == 0:  # Light square
+            return None
+
+        # Count dark squares from top-left
+        square_num = (row * 4) + (col // 2) + 1
+        return square_num
+
+    def notation_to_pos(self, notation):
+        """Convert checkers notation (1-32) to (row, col)."""
+        if notation < 1 or notation > 32:
+            return None
+
+        notation -= 1  # Make 0-indexed
+        row = notation // 4
+        col = (notation % 4) * 2
+
+        # Adjust for odd rows (dark squares start at col 1)
+        if row % 2 == 1:
+            col += 1
+
+        return (row, col)
 
     def create_menu_buttons(self):
         """Create menu button rectangles."""
@@ -106,6 +136,10 @@ class CheckersUI:
         self.dragging = False
         self.bot_thinking = False
 
+        # Reset move trail
+        self.last_move_from = None
+        self.last_move_to = None
+
         # Create bot if needed (always plays as black)
         if mode == 'random':
             self.bot = RandomBot('black')
@@ -120,9 +154,49 @@ class CheckersUI:
 
     def draw_squares(self):
         self.win.fill(WOOD) # Dark squares
+
+        # Draw light squares
         for row in range(ROWS):
             for col in range(row % 2, ROWS, 2):
                 pygame.draw.rect(self.win, CREAM, (col*SQUARE_SIZE, row*SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+
+        # Draw move trail highlighting on dark squares
+        TRAIL_COLOR_FROM = (255, 140, 0, 100)  # Orange with transparency for "from" square
+        TRAIL_COLOR_TO = (255, 215, 0, 120)    # Gold with transparency for "to" square
+
+        if self.last_move_from:
+            row, col = self.last_move_from
+            # Create transparent surface for the highlight
+            highlight_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
+            highlight_surface.fill(TRAIL_COLOR_FROM)
+            self.win.blit(highlight_surface, (col*SQUARE_SIZE, row*SQUARE_SIZE))
+
+        if self.last_move_to:
+            row, col = self.last_move_to
+            highlight_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
+            highlight_surface.fill(TRAIL_COLOR_TO)
+            self.win.blit(highlight_surface, (col*SQUARE_SIZE, row*SQUARE_SIZE))
+
+        # Draw square notation numbers on dark squares
+        notation_font = pygame.font.SysFont('segoeui', 16, bold=True)
+        for row in range(ROWS):
+            for col in range(COLS):
+                # Only number dark squares
+                notation = self.pos_to_notation(row, col)
+                if notation:
+                    # Check if this square is part of the move trail
+                    is_trail_square = (self.last_move_from == (row, col) or
+                                      self.last_move_to == (row, col))
+
+                    # Use darker color on highlighted squares for better contrast
+                    if is_trail_square:
+                        number_color = (40, 40, 40)  # Dark gray/black for visibility on yellow
+                    else:
+                        number_color = (220, 220, 220)  # Bright white-ish
+
+                    # Draw small number in top-left corner of dark square
+                    number_surface = notation_font.render(str(notation), True, number_color)
+                    self.win.blit(number_surface, (col*SQUARE_SIZE + 3, row*SQUARE_SIZE + 2))
 
     def draw_pieces(self):
         for row in range(ROWS):
@@ -300,7 +374,11 @@ class CheckersUI:
                  for i, child in enumerate(children[:11]):
                      y_pos = start_y + i * 48
 
-                     move_str = f"{child.move[0]} → {child.move[1]}"
+                     # Convert move to simplified notation
+                     from_pos, to_pos = child.move
+                     from_notation = self.pos_to_notation(from_pos[0], from_pos[1])
+                     to_notation = self.pos_to_notation(to_pos[0], to_pos[1])
+                     move_str = f"{from_notation} → {to_notation}"
                      score = child.score
 
                      # Highlight best move
@@ -352,7 +430,11 @@ class CheckersUI:
 
             move = self.bot.get_move(self.game)
             if move:
-                self.game.play_move(move[0], move[1])
+                success = self.game.play_move(move[0], move[1])
+                # Track the move trail
+                if success:
+                    self.last_move_from = move[0]
+                    self.last_move_to = move[1]
 
             self.bot_thinking = False
 
@@ -411,7 +493,11 @@ class CheckersUI:
                                 if self.selected_pos:
                                     # Only attempt move if destination is different
                                     if (row, col) != self.selected_pos:
-                                        self.game.play_move(self.selected_pos, (row, col))
+                                        success = self.game.play_move(self.selected_pos, (row, col))
+                                        # Track the move trail if move was successful
+                                        if success:
+                                            self.last_move_from = self.selected_pos
+                                            self.last_move_to = (row, col)
 
                                 self.selected_piece = None
                                 self.selected_pos = None
