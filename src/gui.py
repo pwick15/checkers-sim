@@ -10,33 +10,50 @@ BOARD_WIDTH = 800
 ROWS, COLS = 8, 8
 SQUARE_SIZE = BOARD_WIDTH // COLS
 
-# Colors
-RED = (255, 0, 0)
+# Colors - Professional color scheme
+RED = (220, 47, 2)  # Deep red for pieces
 WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-BLUE = (0, 0, 255)
-GREY = (128, 128, 128)
-CREAM = (248, 228, 204)
-WOOD = (139, 69, 19)
-GREEN = (0, 200, 0)
-LIGHT_BLUE = (173, 216, 230)
+BLACK = (20, 20, 20)  # Rich black for pieces
+DARK_GREY = (40, 40, 40)
+GREY = (90, 90, 90)
+LIGHT_GREY = (180, 180, 180)
+CREAM = (245, 235, 220)  # Lighter cream for board
+WOOD = (101, 67, 33)  # Darker wood
+ACCENT_GREEN = (46, 125, 50)  # Professional green
+ACCENT_BLUE = (25, 118, 210)  # Professional blue
+SIDEBAR_BG = (30, 30, 35)  # Dark sophisticated background
+SIDEBAR_ACCENT = (45, 45, 52)  # Slightly lighter for contrast
+HIGHLIGHT_COLOR = (255, 193, 7)  # Gold for highlights
+# Legacy color names (for compatibility)
+GREEN = ACCENT_GREEN
+BLUE = ACCENT_BLUE
+LIGHT_BLUE = SIDEBAR_ACCENT
 
 class CheckersUI:
     def __init__(self):
         pygame.init()
         pygame.font.init()
         self.win = pygame.display.set_mode((WIDTH, HEIGHT))
-        pygame.display.set_caption('Checkers Simulator')
+        pygame.display.set_caption('Checkers Simulator - AI Edition')
         self.game = Game()
         self.selected_piece = None
         self.selected_pos = None # (row, col)
         self.dragging = False
         self.drag_pos = None # (x, y)
         self.state = 'MENU' # MENU, PLAYING, GAME_OVER
-        self.font_large = pygame.font.SysFont('comicsans', 80)
-        self.font_medium = pygame.font.SysFont('comicsans', 50)
-        self.font_small = pygame.font.SysFont('comicsans', 40)
-        self.font_tiny = pygame.font.SysFont('comicsans', 30)
+
+        # Professional fonts - fallback to default if unavailable
+        try:
+            self.font_large = pygame.font.SysFont('segoeui', 70, bold=True)
+            self.font_medium = pygame.font.SysFont('segoeui', 42, bold=True)
+            self.font_small = pygame.font.SysFont('segoeui', 32)
+            self.font_tiny = pygame.font.SysFont('segoeui', 24)
+        except:
+            # Fallback fonts
+            self.font_large = pygame.font.SysFont('arial', 70, bold=True)
+            self.font_medium = pygame.font.SysFont('arial', 42, bold=True)
+            self.font_small = pygame.font.SysFont('arial', 32)
+            self.font_tiny = pygame.font.SysFont('arial', 24)
 
         # Game mode settings
         self.black_player = 'human'  # 'human', 'random', 'minimax', 'alphabeta'
@@ -49,16 +66,16 @@ class CheckersUI:
     def create_menu_buttons(self):
         """Create menu button rectangles."""
         buttons = []
-        button_width = 400
-        button_height = 70
-        start_y = 200
-        spacing = 20
+        button_width = 480
+        button_height = 75
+        start_y = 220
+        spacing = 22
 
         options = [
-            ('human', 'Play vs Human'),
-            ('random', 'Play vs Random Bot'),
-            ('minimax', 'Play vs Minimax Bot (Smart)'),
-            ('alphabeta', 'Play vs Alpha-Beta Bot (Very Smart)')
+            ('human', '2 Player Mode'),
+            ('random', 'vs Random Bot'),
+            ('minimax', 'vs Minimax Bot (Smart)'),
+            ('alphabeta', 'vs Alpha-Beta Bot (Very Smart)')
         ]
 
         for i, (mode, label) in enumerate(options):
@@ -130,19 +147,27 @@ class CheckersUI:
             pygame.draw.circle(self.win, (255, 215, 0), (x, y), radius // 2) # Gold center for king
 
     def draw_menu(self):
-        """Draw the game mode selection menu."""
-        self.win.fill(CREAM)
+        """Draw the game mode selection menu with professional styling."""
+        # Gradient-like background
+        self.win.fill(DARK_GREY)
 
-        # Title
-        title = self.font_large.render("Checkers", True, BLACK)
-        # Title
-        title = self.font_large.render("Checkers", True, BLACK)
-        self.win.blit(title, (WIDTH//2 - title.get_width()//2, 50)) 
+        # Draw lighter overlay for contrast
+        overlay = pygame.Surface((WIDTH, HEIGHT))
+        overlay.fill(CREAM)
+        overlay.set_alpha(240)
+        self.win.blit(overlay, (0, 0))
+
+        # Title with shadow effect
+        title_text = "CHECKERS AI"
+        title_shadow = self.font_large.render(title_text, True, GREY)
+        title = self.font_large.render(title_text, True, BLACK)
+        self.win.blit(title_shadow, (WIDTH//2 - title.get_width()//2 + 3, 53))
+        self.win.blit(title, (WIDTH//2 - title.get_width()//2, 50))
 
         subtitle = self.font_small.render("Select Game Mode", True, GREY)
-        self.win.blit(subtitle, (WIDTH//2 - subtitle.get_width()//2, 130))
+        self.win.blit(subtitle, (WIDTH//2 - subtitle.get_width()//2, 140))
 
-        # Draw buttons
+        # Draw buttons with modern styling
         mouse_pos = pygame.mouse.get_pos()
 
         for button in self.menu_buttons:
@@ -151,15 +176,28 @@ class CheckersUI:
 
             # Check if hovering
             is_hovering = rect.collidepoint(mouse_pos)
-            button_color = GREEN if is_hovering else LIGHT_BLUE
-            text_color = WHITE if is_hovering else BLACK
 
-            # Draw button
-            pygame.draw.rect(self.win, button_color, rect, border_radius=10)
-            pygame.draw.rect(self.win, BLACK, rect, 3, border_radius=10)
+            if is_hovering:
+                button_color = ACCENT_GREEN
+                text_color = WHITE
+                border_color = ACCENT_GREEN
+            else:
+                button_color = WHITE
+                text_color = DARK_GREY
+                border_color = LIGHT_GREY
+
+            # Draw button with shadow
+            shadow_rect = rect.copy()
+            shadow_rect.x += 3
+            shadow_rect.y += 3
+            pygame.draw.rect(self.win, GREY, shadow_rect, border_radius=12)
+
+            # Draw main button
+            pygame.draw.rect(self.win, button_color, rect, border_radius=12)
+            pygame.draw.rect(self.win, border_color, rect, 2, border_radius=12)
 
             # Draw text
-            text = self.font_tiny.render(label, True, text_color)
+            text = self.font_small.render(label, True, text_color)
             text_rect = text.get_rect(center=rect.center)
             self.win.blit(text, text_rect)
 
@@ -215,50 +253,95 @@ class CheckersUI:
     def draw_sidebar(self):
         """Draw the sidebar with game info and bot visualization."""
         sidebar_rect = pygame.Rect(BOARD_WIDTH, 0, WIDTH - BOARD_WIDTH, HEIGHT)
-        pygame.draw.rect(self.win, LIGHT_BLUE, sidebar_rect)
-        pygame.draw.rect(self.win, BLACK, sidebar_rect, 3) # Border
+        pygame.draw.rect(self.win, SIDEBAR_BG, sidebar_rect)
+
+        # Accent bar at top
+        accent_bar = pygame.Rect(BOARD_WIDTH, 0, WIDTH - BOARD_WIDTH, 5)
+        pygame.draw.rect(self.win, ACCENT_BLUE, accent_bar)
 
         # Title
-        title = self.font_medium.render("Bot Visualization", True, BLACK)
+        title = self.font_medium.render("AI Analysis", True, WHITE)
         self.win.blit(title, (BOARD_WIDTH + 20, 20))
 
         if self.bot and hasattr(self.bot, 'last_decision_tree') and self.bot.last_decision_tree:
             if self.bot_thinking:
-                 status = self.font_small.render("Thinking...", True, RED)
+                 status = self.font_small.render("Thinking...", True, HIGHLIGHT_COLOR)
                  self.win.blit(status, (BOARD_WIDTH + 20, 80))
+
+                 # Animated thinking indicator
+                 import time
+                 dots = "." * (int(time.time() * 2) % 4)
+                 thinking_text = self.font_tiny.render(f"Computing{dots}", True, LIGHT_GREY)
+                 self.win.blit(thinking_text, (BOARD_WIDTH + 20, 120))
             else:
-                 status = self.font_small.render("Last Move Analysis", True, BLACK)
+                 status = self.font_small.render("Last Move", True, LIGHT_GREY)
                  self.win.blit(status, (BOARD_WIDTH + 20, 80))
-                 
-                 # Show nodes explored
-                 nodes_text = self.font_tiny.render(f"Nodes Explored: {self.bot.nodes_explored}", True, BLACK)
-                 self.win.blit(nodes_text, (BOARD_WIDTH + 20, 120))
+
+                 # Show nodes explored with box
+                 nodes_box = pygame.Rect(BOARD_WIDTH + 15, 115, 360, 45)
+                 pygame.draw.rect(self.win, SIDEBAR_ACCENT, nodes_box, border_radius=8)
+                 nodes_text = self.font_tiny.render(f"Nodes Explored: {self.bot.nodes_explored:,}", True, WHITE)
+                 self.win.blit(nodes_text, (BOARD_WIDTH + 25, 128))
+
+                 # Section title
+                 section_title = self.font_tiny.render("Move Evaluations", True, LIGHT_GREY)
+                 self.win.blit(section_title, (BOARD_WIDTH + 20, 175))
+
+                 # Divider line
+                 pygame.draw.line(self.win, SIDEBAR_ACCENT, (BOARD_WIDTH + 20, 200), (BOARD_WIDTH + 380, 200), 2)
 
                  # Show Top Level Moves
-                 start_y = 160
-                 
-                 # Sort children by score descending
-                 # Note: children might be None or children scores might be None in some edge cases?
-                 # Minimax maximizes score.
-                 
+                 start_y = 215
+
                  children = [c for c in self.bot.last_decision_tree.children if c.score is not None]
                  children.sort(key=lambda x: x.score, reverse=True)
-                 
-                 # Limit to displaying top 10 to fit screen
-                 for i, child in enumerate(children[:12]):
-                     y_pos = start_y + i * 40
-                     
-                     move_str = f"{child.move[0]} -> {child.move[1]}"
-                     score_str = f"Score: {child.score}"
-                     
-                     text_color = BLACK
-                     if child.score == self.bot.last_decision_tree.score:
-                         text_color = GREEN # Highlight best move
-                     
-                     # Check if mouse hover (simple enhancement)
-                     
-                     move_text = self.font_tiny.render(f"{move_str}: {score_str}", True, text_color)
-                     self.win.blit(move_text, (BOARD_WIDTH + 20, y_pos))
+
+                 # Limit to displaying top moves to fit screen
+                 for i, child in enumerate(children[:11]):
+                     y_pos = start_y + i * 48
+
+                     move_str = f"{child.move[0]} → {child.move[1]}"
+                     score = child.score
+
+                     # Highlight best move
+                     is_best = (score == self.bot.last_decision_tree.score)
+
+                     if is_best:
+                         # Draw highlight box for best move
+                         highlight_box = pygame.Rect(BOARD_WIDTH + 15, y_pos - 5, 360, 40)
+                         pygame.draw.rect(self.win, SIDEBAR_ACCENT, highlight_box, border_radius=6)
+                         pygame.draw.rect(self.win, ACCENT_GREEN, highlight_box, 2, border_radius=6)
+
+                     text_color = HIGHLIGHT_COLOR if is_best else WHITE
+                     score_color = ACCENT_GREEN if score > 0 else RED if score < 0 else LIGHT_GREY
+
+                     # Move text
+                     move_text = self.font_tiny.render(move_str, True, text_color)
+                     self.win.blit(move_text, (BOARD_WIDTH + 25, y_pos))
+
+                     # Score with bar visualization
+                     score_text = self.font_tiny.render(f"{score:+d}", True, score_color)
+                     self.win.blit(score_text, (BOARD_WIDTH + 260, y_pos))
+
+                     # Score bar
+                     if i < 11:
+                         max_bar_width = 80
+                         bar_height = 8
+                         # Normalize score for bar (assuming scores roughly -100 to +100)
+                         normalized = max(min(score / 100.0, 1.0), -1.0)
+                         bar_width = int(abs(normalized) * max_bar_width)
+                         bar_x = BOARD_WIDTH + 260
+                         bar_y = y_pos + 20
+
+                         # Background bar
+                         bg_bar = pygame.Rect(bar_x, bar_y, max_bar_width, bar_height)
+                         pygame.draw.rect(self.win, DARK_GREY, bg_bar, border_radius=4)
+
+                         # Score bar
+                         if bar_width > 0:
+                             score_bar = pygame.Rect(bar_x, bar_y, bar_width, bar_height)
+                             bar_color = ACCENT_GREEN if score > 0 else RED
+                             pygame.draw.rect(self.win, bar_color, score_bar, border_radius=4)
 
     def handle_bot_move(self):
         """Let the bot make a move."""
