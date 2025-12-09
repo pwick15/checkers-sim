@@ -558,7 +558,7 @@ class CheckersUI:
         self.win.blit(title, (x, y))
 
         # Progress
-        progress_text = f"Frame {state['current_frame'] + 1} / {state['total_frames']}"
+        progress_text = f"Step {state['current_frame'] + 1} / {state['total_frames']}"
         progress_surface = self.font_tiny.render(progress_text, True, WHITE)
         self.win.blit(progress_surface, (x, y + 25))
 
@@ -652,10 +652,10 @@ class CheckersUI:
                         self.menu_buttons = self.create_menu_buttons()
 
                 elif self.state == 'PLAYING':
-                    # Handle tree animation controls
-                    if self.tree_animator and event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.type == pygame.MOUSEBUTTONDOWN:
                         pos = pygame.mouse.get_pos()
-                        if pos[0] >= BOARD_WIDTH:  # Click in sidebar
+                        # Handle tree animation controls in sidebar
+                        if self.tree_animator and pos[0] >= BOARD_WIDTH:
                             x, y = BOARD_WIDTH + 20, 600
                             button_y = y + 85
                             button_width = 50
@@ -672,12 +672,13 @@ class CheckersUI:
                             for rect, action in buttons:
                                 if rect.collidepoint(pos):
                                     action()
-                                    break
+                                    break # Found a button, no need to check others
+                            
+                            # Since we handled a click in the sidebar, don't process it as a board click.
+                            continue
 
-                    # Only allow human input when it's their turn (red or black if no bot)
-                    if not self.bot or self.game.current_turn == 'red':
-                        if event.type == pygame.MOUSEBUTTONDOWN:
-                            pos = pygame.mouse.get_pos()
+                        # Only allow human input when it's their turn (red or black if no bot)
+                        if not self.bot or self.game.current_turn == 'red':
                             # Check if click is on board
                             if pos[0] < BOARD_WIDTH:
                                 row, col = self.get_row_col_from_mouse(pos)
@@ -688,32 +689,33 @@ class CheckersUI:
                                     self.selected_pos = (row, col)
                                     self.dragging = True
                                     self.drag_pos = pos
+                    
+                    elif event.type == pygame.MOUSEMOTION:
+                        if self.dragging:
+                            self.drag_pos = pygame.mouse.get_pos()
 
-                        elif event.type == pygame.MOUSEMOTION:
-                            if self.dragging:
-                                self.drag_pos = pygame.mouse.get_pos()
+                    elif event.type == pygame.MOUSEBUTTONUP:
+                        if self.dragging:
+                            pos = pygame.mouse.get_pos()
+                            row, col = self.get_row_col_from_mouse(pos)
 
-                        elif event.type == pygame.MOUSEBUTTONUP:
-                            if self.dragging:
-                                pos = pygame.mouse.get_pos()
-                                row, col = self.get_row_col_from_mouse(pos)
+                            # Try to move
+                            if self.selected_pos:
+                                # Only attempt move if destination is different
+                                if (row, col) != self.selected_pos:
+                                    self.tree_animator = None # Reset animator
+                                    success = self.game.play_move(self.selected_pos, (row, col))
+                                    # Track the move trail if move was successful
+                                    if success:
+                                        self.last_move_from = self.selected_pos
+                                        self.last_move_to = (row, col)
 
-                                # Try to move
-                                if self.selected_pos:
-                                    # Only attempt move if destination is different
-                                    if (row, col) != self.selected_pos:
-                                        success = self.game.play_move(self.selected_pos, (row, col))
-                                        # Track the move trail if move was successful
-                                        if success:
-                                            self.last_move_from = self.selected_pos
-                                            self.last_move_to = (row, col)
+                            self.selected_piece = None
+                            self.selected_pos = None
+                            self.dragging = False
 
-                                self.selected_piece = None
-                                self.selected_pos = None
-                                self.dragging = False
-
-                                if self.game.is_over():
-                                    self.state = 'GAME_OVER'
+                            if self.game.is_over():
+                                self.state = 'GAME_OVER'
 
             # Handle bot move if it's the bot's turn
             if self.state == 'PLAYING' and not self.bot_thinking:
