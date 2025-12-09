@@ -29,6 +29,84 @@ GREEN = ACCENT_GREEN
 BLUE = ACCENT_BLUE
 LIGHT_BLUE = SIDEBAR_ACCENT
 
+class TreeAnimator:
+    """Manages animated playback of search tree exploration"""
+
+    def __init__(self, decision_tree):
+        self.tree = decision_tree
+        self.traversal_sequence = []  # [(node, action)] ordered by visit
+        self.current_frame = 0
+        self.is_playing = False
+        self.speed = 1.0  # animation speed multiplier
+        self.frame_delay = 100  # ms between frames
+
+    def reconstruct_traversal(self):
+        """Build animation sequence from completed tree"""
+        # Collect all nodes with visit_order
+        nodes = []
+        self._collect_nodes(self.tree, nodes)
+
+        # Sort by visit_order
+        nodes.sort(key=lambda n: n.visit_order or float('inf'))
+
+        # Build sequence with actions: 'visit', 'evaluate', 'backtrack'
+        for node in nodes:
+            self.traversal_sequence.append((node, 'visit'))
+            if node.score is not None:
+                self.traversal_sequence.append((node, 'evaluate'))
+
+        return len(self.traversal_sequence)
+
+    def _collect_nodes(self, node, result):
+        """Recursive DFS to collect all nodes"""
+        if node:
+            result.append(node)
+            for child in node.children:
+                self._collect_nodes(child, result)
+
+    def get_current_state(self):
+        """Returns visualization state for current frame"""
+        if not self.traversal_sequence:
+            return None
+
+        current_node, action = self.traversal_sequence[self.current_frame]
+        
+        # Get all nodes visited up to this frame
+        visited_nodes_with_actions = self.traversal_sequence[:self.current_frame + 1]
+        visited = set()
+        for n, a in visited_nodes_with_actions:
+            if a == 'visit':
+                visited.add(n)
+
+
+        return {
+            'current_node': current_node,
+            'action': action,
+            'visited_nodes': visited,
+            'total_frames': len(self.traversal_sequence),
+            'current_frame': self.current_frame
+        }
+
+    def step_forward(self):
+        """Advance one frame"""
+        if self.current_frame < len(self.traversal_sequence) - 1:
+            self.current_frame += 1
+
+    def step_backward(self):
+        """Go back one frame"""
+        if self.current_frame > 0:
+            self.current_frame -= 1
+
+    def play(self):
+        self.is_playing = True
+
+    def pause(self):
+        self.is_playing = False
+
+    def reset(self):
+        self.current_frame = 0
+        self.is_playing = False
+
 class CheckersUI:
     def __init__(self):
         pygame.init()
@@ -66,6 +144,9 @@ class CheckersUI:
 
         # Menu buttons
         self.menu_buttons = self.create_menu_buttons()
+
+        self.tree_animator = None  # TreeAnimator instance
+        self.last_animation_update = 0  # timestamp for animation timing
 
     def pos_to_notation(self, row, col):
         """Convert (row, col) to checkers notation (1-32)."""
@@ -325,11 +406,11 @@ class CheckersUI:
         pygame.display.update()
 
     def draw_sidebar(self):
-        """Draw the sidebar with game info and bot visualization."""
+        """Draw sidebar with animated tree visualization"""
         sidebar_rect = pygame.Rect(BOARD_WIDTH, 0, WIDTH - BOARD_WIDTH, HEIGHT)
         pygame.draw.rect(self.win, SIDEBAR_BG, sidebar_rect)
 
-        # Accent bar at top
+        # Accent bar
         accent_bar = pygame.Rect(BOARD_WIDTH, 0, WIDTH - BOARD_WIDTH, 5)
         pygame.draw.rect(self.win, ACCENT_BLUE, accent_bar)
 
@@ -339,87 +420,192 @@ class CheckersUI:
 
         if self.bot and hasattr(self.bot, 'last_decision_tree') and self.bot.last_decision_tree:
             if self.bot_thinking:
-                 status = self.font_small.render("Thinking...", True, HIGHLIGHT_COLOR)
-                 self.win.blit(status, (BOARD_WIDTH + 20, 80))
-
-                 # Animated thinking indicator
-                 import time
-                 dots = "." * (int(time.time() * 2) % 4)
-                 thinking_text = self.font_tiny.render(f"Computing{dots}", True, LIGHT_GREY)
-                 self.win.blit(thinking_text, (BOARD_WIDTH + 20, 120))
+                # Show "Thinking..." (same as before)
+                status = self.font_small.render("Thinking...", True, HIGHLIGHT_COLOR)
+                self.win.blit(status, (BOARD_WIDTH + 20, 80))
             else:
-                 status = self.font_small.render("Last Move", True, LIGHT_GREY)
-                 self.win.blit(status, (BOARD_WIDTH + 20, 80))
+                # Initialize animator if not exists
+                if not self.tree_animator:
+                    self.tree_animator = TreeAnimator(self.bot.last_decision_tree)
+                    self.tree_animator.reconstruct_traversal()
+                    self.tree_animator.play()  # Auto-start animation
 
-                 # Show nodes explored with box
-                 nodes_box = pygame.Rect(BOARD_WIDTH + 15, 115, 360, 45)
-                 pygame.draw.rect(self.win, SIDEBAR_ACCENT, nodes_box, border_radius=8)
-                 nodes_text = self.font_tiny.render(f"Nodes Explored: {self.bot.nodes_explored:,}", True, WHITE)
-                 self.win.blit(nodes_text, (BOARD_WIDTH + 25, 128))
+                # Update animation
+                if self.tree_animator.is_playing:
+                    current_time = pygame.time.get_ticks()
+                    if current_time - self.last_animation_update > self.tree_animator.frame_delay:
+                        self.tree_animator.step_forward()
+                        self.last_animation_update = current_time
+                        if self.tree_animator.current_frame >= len(self.tree_animator.traversal_sequence) - 1:
+                            self.tree_animator.pause()  # Stop at end
 
-                 # Section title
-                 section_title = self.font_tiny.render("Move Evaluations", True, LIGHT_GREY)
-                 self.win.blit(section_title, (BOARD_WIDTH + 20, 175))
+                # Draw three sections
+                self._draw_tree_view(BOARD_WIDTH + 20, 80, 360, 300)
+                self._draw_board_preview(BOARD_WIDTH + 20, 390, 360, 200)
+                self._draw_playback_controls(BOARD_WIDTH + 20, 600, 360, 180)
 
-                 # Divider line
-                 pygame.draw.line(self.win, SIDEBAR_ACCENT, (BOARD_WIDTH + 20, 200), (BOARD_WIDTH + 380, 200), 2)
+    def _draw_tree_view(self, x, y, width, height):
+        """Draw indented tree list with current node highlighted"""
+        state = self.tree_animator.get_current_state()
+        if not state:
+            return
 
-                 # Show Top Level Moves
-                 start_y = 215
+        # Section title
+        title = self.font_tiny.render("Search Tree Exploration", True, LIGHT_GREY)
+        self.win.blit(title, (x, y))
 
-                 children = [c for c in self.bot.last_decision_tree.children if c.score is not None]
-                 children.sort(key=lambda x: x.score, reverse=True)
+        # Scrollable tree view
+        tree_y = y + 30
+        indent_size = 15
+        row_height = 35
 
-                 # Limit to displaying top moves to fit screen
-                 for i, child in enumerate(children[:11]):
-                     y_pos = start_y + i * 48
+        # Flatten tree for display
+        nodes_to_display = self._get_visible_nodes(self.bot.last_decision_tree, state['visited_nodes'])
 
-                     # Convert move to simplified notation
-                     from_pos, to_pos = child.move
-                     from_notation = self.pos_to_notation(from_pos[0], from_pos[1])
-                     to_notation = self.pos_to_notation(to_pos[0], to_pos[1])
-                     move_str = f"{from_notation} → {to_notation}"
-                     score = child.score
+        for i, (node, depth) in enumerate(nodes_to_display[:8]):  # Show top 8 nodes
+            node_y = tree_y + i * row_height
+            node_x = x + depth * indent_size
 
-                     # Highlight best move
-                     is_best = (score == self.bot.last_decision_tree.score)
+            # Determine colors
+            is_current = (node == state['current_node'])
+            is_visited = node in state['visited_nodes']
 
-                     if is_best:
-                         # Draw highlight box for best move
-                         highlight_box = pygame.Rect(BOARD_WIDTH + 15, y_pos - 5, 360, 40)
-                         pygame.draw.rect(self.win, SIDEBAR_ACCENT, highlight_box, border_radius=6)
-                         pygame.draw.rect(self.win, ACCENT_GREEN, highlight_box, 2, border_radius=6)
+            if is_current:
+                bg_color = SIDEBAR_ACCENT
+                text_color = HIGHLIGHT_COLOR
+                pygame.draw.rect(self.win, bg_color,
+                               pygame.Rect(x, node_y - 2, width, row_height - 2),
+                               border_radius=4)
+            elif is_visited:
+                text_color = WHITE
+            else:
+                text_color = GREY
 
-                     text_color = HIGHLIGHT_COLOR if is_best else WHITE
-                     score_color = ACCENT_GREEN if score > 0 else RED if score < 0 else LIGHT_GREY
+            # Draw node info
+            if node.move:
+                from_not = self.pos_to_notation(node.move[0][0], node.move[0][1])
+                to_not = self.pos_to_notation(node.move[1][0], node.move[1][1])
+                move_str = f"{from_not}→{to_not}"
+            else:
+                move_str = "Root"
 
-                     # Move text
-                     move_text = self.font_tiny.render(move_str, True, text_color)
-                     self.win.blit(move_text, (BOARD_WIDTH + 25, y_pos))
+            score_str = f"{node.score:+d}" if node.score is not None else "..."
 
-                     # Score with bar visualization
-                     score_text = self.font_tiny.render(f"{score:+d}", True, score_color)
-                     self.win.blit(score_text, (BOARD_WIDTH + 260, y_pos))
+            # Draw bullet and text
+            bullet = "►" if is_current else "•"
+            text = f"{bullet} {move_str}  {score_str}"
 
-                     # Score bar
-                     if i < 11:
-                         max_bar_width = 80
-                         bar_height = 8
-                         # Normalize score for bar (assuming scores roughly -100 to +100)
-                         normalized = max(min(score / 100.0, 1.0), -1.0)
-                         bar_width = int(abs(normalized) * max_bar_width)
-                         bar_x = BOARD_WIDTH + 260
-                         bar_y = y_pos + 20
+            if node.is_pruned:
+                text += " (pruned)"
+                text_color = GREY
 
-                         # Background bar
-                         bg_bar = pygame.Rect(bar_x, bar_y, max_bar_width, bar_height)
-                         pygame.draw.rect(self.win, DARK_GREY, bg_bar, border_radius=4)
+            text_surface = self.font_tiny.render(text, True, text_color)
+            self.win.blit(text_surface, (node_x, node_y))
 
-                         # Score bar
-                         if bar_width > 0:
-                             score_bar = pygame.Rect(bar_x, bar_y, bar_width, bar_height)
-                             bar_color = ACCENT_GREEN if score > 0 else RED
-                             pygame.draw.rect(self.win, bar_color, score_bar, border_radius=4)
+    def _get_visible_nodes(self, root, visited_nodes):
+        """Get nodes to display in tree view (DFS order)"""
+        result = []
+        self._collect_visible_nodes(root, 0, visited_nodes, result)
+        return result
+
+    def _collect_visible_nodes(self, node, depth, visited_nodes, result):
+        """Recursive collection of nodes in DFS order"""
+        if node:
+            result.append((node, depth))
+            if node in visited_nodes:  # Only show children if visited
+                for child in node.children:
+                    self._collect_visible_nodes(child, depth + 1, visited_nodes, result)
+
+    def _draw_board_preview(self, x, y, width, height):
+        """Draw miniature board showing current position"""
+        state = self.tree_animator.get_current_state()
+        if not state:
+            return
+
+        # Section title
+        title = self.font_tiny.render("Current Position", True, LIGHT_GREY)
+        self.win.blit(title, (x, y))
+
+        current_node = state['current_node']
+
+        # Show move being evaluated
+        if current_node.move:
+            from_not = self.pos_to_notation(current_node.move[0][0], current_node.move[0][1])
+            to_not = self.pos_to_notation(current_node.move[1][0], current_node.move[1][1])
+            move_text = f"Evaluating: {from_not} → {to_not}"
+            score_text = f"Score: {current_node.score}" if current_node.score is not None else "Score: evaluating..."
+        else:
+            move_text = "Starting position"
+            score_text = ""
+
+        move_surface = self.font_tiny.render(move_text, True, WHITE)
+        self.win.blit(move_surface, (x, y + 25))
+
+        if score_text:
+            score_surface = self.font_tiny.render(score_text, True, HIGHLIGHT_COLOR)
+            self.win.blit(score_surface, (x, y + 50))
+
+        # Note: Could add miniature board rendering here if board_state is stored
+
+    def _draw_playback_controls(self, x, y, width, height):
+        """Draw animation playback controls"""
+        state = self.tree_animator.get_current_state()
+        if not state:
+            return
+
+        # Title
+        title = self.font_tiny.render("Playback Controls", True, LIGHT_GREY)
+        self.win.blit(title, (x, y))
+
+        # Progress
+        progress_text = f"Frame {state['current_frame'] + 1} / {state['total_frames']}"
+        progress_surface = self.font_tiny.render(progress_text, True, WHITE)
+        self.win.blit(progress_surface, (x, y + 25))
+
+        # Nodes explored
+        nodes_text = f"Nodes Explored: {self.bot.nodes_explored:,}"
+        nodes_surface = self.font_tiny.render(nodes_text, True, WHITE)
+        self.win.blit(nodes_surface, (x, y + 50))
+
+        # Control buttons
+        button_y = y + 85
+        button_width = 50
+        button_height = 35
+        spacing = 10
+
+        # Define buttons
+        buttons = [
+            ('<<', x, self.tree_animator.reset),
+            ('<', x + button_width + spacing, self.tree_animator.step_backward),
+            ('▶' if not self.tree_animator.is_playing else '⏸',
+             x + 2 * (button_width + spacing),
+             self.tree_animator.play if not self.tree_animator.is_playing else self.tree_animator.pause),
+            ('>', x + 3 * (button_width + spacing), self.tree_animator.step_forward),
+        ]
+
+        mouse_pos = pygame.mouse.get_pos()
+
+        for label, btn_x, action in buttons:
+            btn_rect = pygame.Rect(btn_x, button_y, button_width, button_height)
+
+            # Check hover
+            is_hovering = btn_rect.collidepoint(mouse_pos)
+
+            # Draw button
+            btn_color = ACCENT_GREEN if is_hovering else SIDEBAR_ACCENT
+            pygame.draw.rect(self.win, btn_color, btn_rect, border_radius=6)
+            pygame.draw.rect(self.win, LIGHT_GREY, btn_rect, 2, border_radius=6)
+
+            # Draw label
+            label_surface = self.font_small.render(label, True, WHITE)
+            label_rect = label_surface.get_rect(center=btn_rect.center)
+            self.win.blit(label_surface, label_rect)
+
+        # Speed controls
+        speed_y = button_y + button_height + 15
+        speed_text = f"Speed: {self.tree_animator.speed}x"
+        speed_surface = self.font_tiny.render(speed_text, True, LIGHT_GREY)
+        self.win.blit(speed_surface, (x, speed_y))
 
     def handle_bot_move(self):
         """Let the bot make a move."""
@@ -428,6 +614,7 @@ class CheckersUI:
             self.draw()  # Update display to show "thinking"
             pygame.time.wait(300)  # Brief pause so user can see it's thinking
 
+            self.tree_animator = None # Reset animator
             move = self.bot.get_move(self.game)
             if move:
                 success = self.game.play_move(move[0], move[1])
@@ -465,6 +652,28 @@ class CheckersUI:
                         self.menu_buttons = self.create_menu_buttons()
 
                 elif self.state == 'PLAYING':
+                    # Handle tree animation controls
+                    if self.tree_animator and event.type == pygame.MOUSEBUTTONDOWN:
+                        pos = pygame.mouse.get_pos()
+                        if pos[0] >= BOARD_WIDTH:  # Click in sidebar
+                            x, y = BOARD_WIDTH + 20, 600
+                            button_y = y + 85
+                            button_width = 50
+                            button_height = 35
+                            spacing = 10
+
+                            buttons = [
+                                (pygame.Rect(x, button_y, button_width, button_height), self.tree_animator.reset),
+                                (pygame.Rect(x + button_width + spacing, button_y, button_width, button_height), self.tree_animator.step_backward),
+                                (pygame.Rect(x + 2 * (button_width + spacing), button_y, button_width, button_height), self.tree_animator.play if not self.tree_animator.is_playing else self.tree_animator.pause),
+                                (pygame.Rect(x + 3 * (button_width + spacing), button_y, button_width, button_height), self.tree_animator.step_forward),
+                            ]
+                            
+                            for rect, action in buttons:
+                                if rect.collidepoint(pos):
+                                    action()
+                                    break
+
                     # Only allow human input when it's their turn (red or black if no bot)
                     if not self.bot or self.game.current_turn == 'red':
                         if event.type == pygame.MOUSEBUTTONDOWN:

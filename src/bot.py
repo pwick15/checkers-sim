@@ -18,6 +18,10 @@ class DecisionNode:
         self.move = move
         self.score = score
         self.children = children if children is not None else []
+        self.visit_order = None  # NEW: sequence in DFS traversal
+        self.is_pruned = False   # NEW: alpha-beta pruning flag
+        self.depth = 0           # NEW: depth in tree (0 = root)
+        self.board_state = None  # NEW: optional simplified board state
 
 class BotPlayer(ABC):
     """Abstract base class for bot players."""
@@ -111,17 +115,22 @@ class MinimaxBot(BotPlayer):
         super().__init__(color)
         self.depth = depth
         self.nodes_explored = 0  # For educational purposes
+        self.visit_counter = 0 # NEW: for tree visualization
 
         self.last_decision_tree = None
 
     def get_move(self, game):
         """Get the best move using minimax algorithm."""
         self.nodes_explored = 0
+        self.visit_counter = 0
         best_move = None
         best_score = float('-inf')
 
         # Root of the decision tree for this move
         self.last_decision_tree = DecisionNode(None)
+        self.last_decision_tree.depth = 0
+        self.last_decision_tree.visit_order = self.visit_counter
+        self.visit_counter += 1
         
         moves = self.get_all_possible_moves(game)
 
@@ -137,6 +146,7 @@ class MinimaxBot(BotPlayer):
 
             # Create a node for this move
             move_node = DecisionNode((start_pos, end_pos))
+            move_node.depth = 1
             self.last_decision_tree.children.append(move_node)
 
             # Get score for this move
@@ -166,6 +176,10 @@ class MinimaxBot(BotPlayer):
             int: Score of the position
         """
         self.nodes_explored += 1
+        
+        if parent_node:
+            parent_node.visit_order = self.visit_counter
+            self.visit_counter += 1
 
         # Base case: depth 0 or game over
         if depth == 0 or game.is_over():
@@ -188,6 +202,7 @@ class MinimaxBot(BotPlayer):
                             # Create child node if tracking
                             if parent_node is not None:
                                 child_node = DecisionNode(((r, c), end_pos))
+                                child_node.depth = parent_node.depth + 1
                                 parent_node.children.append(child_node)
                             else:
                                 child_node = None
@@ -218,6 +233,7 @@ class MinimaxBot(BotPlayer):
                             # Create child node if tracking
                             if parent_node is not None:
                                 child_node = DecisionNode(((r, c), end_pos))
+                                child_node.depth = parent_node.depth + 1
                                 parent_node.children.append(child_node)
                             else:
                                 child_node = None
@@ -301,6 +317,7 @@ class AlphaBetaBot(MinimaxBot):
     def get_move(self, game):
         """Get the best move using alpha-beta pruning."""
         self.nodes_explored = 0
+        self.visit_counter = 0
         best_move = None
         best_score = float('-inf')
         alpha = float('-inf')
@@ -308,6 +325,9 @@ class AlphaBetaBot(MinimaxBot):
 
         # Root of the decision tree for this move
         self.last_decision_tree = DecisionNode(None)
+        self.last_decision_tree.depth = 0
+        self.last_decision_tree.visit_order = self.visit_counter
+        self.visit_counter += 1
 
         moves = self.get_all_possible_moves(game)
 
@@ -322,6 +342,7 @@ class AlphaBetaBot(MinimaxBot):
             
             # Create a node for this move
             move_node = DecisionNode((start_pos, end_pos))
+            move_node.depth = 1
             self.last_decision_tree.children.append(move_node)
 
             score = self._alpha_beta(game_copy, self.depth - 1, alpha, beta, False, move_node)
@@ -352,6 +373,9 @@ class AlphaBetaBot(MinimaxBot):
             int: Score of the position
         """
         self.nodes_explored += 1
+        if parent_node:
+            parent_node.visit_order = self.visit_counter
+            self.visit_counter += 1
 
         if depth == 0 or game.is_over():
             return self._evaluate_board(game)
@@ -359,63 +383,81 @@ class AlphaBetaBot(MinimaxBot):
         if is_maximizing:
             max_score = float('-inf')
 
+            # Generate all child nodes first to handle pruning visualization
+            moves = []
             for r in range(8):
                 for c in range(8):
                     piece = game.board.get_piece(r, c)
                     if piece and piece.color == self.color:
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
-                            game_copy = self._copy_game(game)
-                            game_copy.play_move((r, c), end_pos)
-                            
-                            # Create child node if tracking
-                            if parent_node is not None:
-                                child_node = DecisionNode(((r, c), end_pos))
-                                parent_node.children.append(child_node)
-                            else:
-                                child_node = None
+                            moves.append(((r, c), end_pos))
+            
+            children = []
+            if parent_node:
+                for move in moves:
+                    child_node = DecisionNode(move)
+                    child_node.depth = parent_node.depth + 1
+                    children.append(child_node)
+                parent_node.children = children
 
-                            score = self._alpha_beta(game_copy, depth - 1, alpha, beta, False, child_node)
-                            if child_node:
-                                child_node.score = score
-                            
-                            max_score = max(max_score, score)
-                            alpha = max(alpha, score)
+            for i, child in enumerate(children):
+                game_copy = self._copy_game(game)
+                game_copy.play_move(child.move[0], child.move[1])
+                
+                score = self._alpha_beta(game_copy, depth - 1, alpha, beta, False, child)
+                child.score = score
+                
+                max_score = max(max_score, score)
+                alpha = max(alpha, score)
 
-                            # Prune: Beta cutoff
-                            if beta <= alpha:
-                                return max_score
+                if beta <= alpha:
+                    # Prune: Mark remaining siblings as pruned
+                    for j in range(i + 1, len(children)):
+                        sibling_to_prune = children[j]
+                        sibling_to_prune.is_pruned = True
+                        sibling_to_prune.visit_order = self.visit_counter
+                        self.visit_counter += 1
+                    return max_score
 
             return max_score if max_score != float('-inf') else self._evaluate_board(game)
-        else:
+        else: # Minimizing
             min_score = float('inf')
             opponent_color = 'black' if self.color == 'red' else 'red'
 
+            moves = []
             for r in range(8):
                 for c in range(8):
                     piece = game.board.get_piece(r, c)
                     if piece and piece.color == opponent_color:
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
-                            game_copy = self._copy_game(game)
-                            game_copy.play_move((r, c), end_pos)
-                            
-                            # Create child node if tracking
-                            if parent_node is not None:
-                                child_node = DecisionNode(((r, c), end_pos))
-                                parent_node.children.append(child_node)
-                            else:
-                                child_node = None
+                            moves.append(((r, c), end_pos))
 
-                            score = self._alpha_beta(game_copy, depth - 1, alpha, beta, True, child_node)
-                            if child_node:
-                                child_node.score = score
-                            
-                            min_score = min(min_score, score)
-                            beta = min(beta, score)
+            children = []
+            if parent_node:
+                for move in moves:
+                    child_node = DecisionNode(move)
+                    child_node.depth = parent_node.depth + 1
+                    children.append(child_node)
+                parent_node.children = children
 
-                            # Prune: Alpha cutoff
-                            if beta <= alpha:
-                                return min_score
+            for i, child in enumerate(children):
+                game_copy = self._copy_game(game)
+                game_copy.play_move(child.move[0], child.move[1])
+                
+                score = self._alpha_beta(game_copy, depth - 1, alpha, beta, True, child)
+                child.score = score
+                
+                min_score = min(min_score, score)
+                beta = min(beta, score)
 
+                if beta <= alpha:
+                    # Prune: Mark remaining siblings as pruned
+                    for j in range(i + 1, len(children)):
+                        sibling_to_prune = children[j]
+                        sibling_to_prune.is_pruned = True
+                        sibling_to_prune.visit_order = self.visit_counter
+                        self.visit_counter += 1
+                    return min_score
             return min_score if min_score != float('inf') else self._evaluate_board(game)
