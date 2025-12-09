@@ -5,9 +5,10 @@ from src.piece import Piece
 from src.bot import RandomBot, MinimaxBot, AlphaBetaBot
 
 # Constants
-WIDTH, HEIGHT = 800, 800
+WIDTH, HEIGHT = 1200, 800
+BOARD_WIDTH = 800
 ROWS, COLS = 8, 8
-SQUARE_SIZE = WIDTH // COLS
+SQUARE_SIZE = BOARD_WIDTH // COLS
 
 # Colors
 RED = (255, 0, 0)
@@ -73,6 +74,8 @@ class CheckersUI:
 
     def get_row_col_from_mouse(self, pos):
         x, y = pos
+        if x >= BOARD_WIDTH:
+            return -1, -1 # Clicked in sidebar
         row = y // SQUARE_SIZE
         col = x // SQUARE_SIZE
         return row, col
@@ -132,7 +135,9 @@ class CheckersUI:
 
         # Title
         title = self.font_large.render("Checkers", True, BLACK)
-        self.win.blit(title, (WIDTH//2 - title.get_width()//2, 50))
+        # Title
+        title = self.font_large.render("Checkers", True, BLACK)
+        self.win.blit(title, (WIDTH//2 - title.get_width()//2, 50)) 
 
         subtitle = self.font_small.render("Select Game Mode", True, GREY)
         self.win.blit(subtitle, (WIDTH//2 - subtitle.get_width()//2, 130))
@@ -169,8 +174,8 @@ class CheckersUI:
         self.win.blit(text_surface, (WIDTH/2 - text_surface.get_width()/2, HEIGHT/2 - text_surface.get_height()/2 - 50))
 
         if subtext:
-            subtext_surface = self.font_small.render(subtext, 1, BLACK)
-            self.win.blit(subtext_surface, (WIDTH/2 - subtext_surface.get_width()/2, HEIGHT/2 + 20))
+             subtext_surface = self.font_small.render(subtext, 1, BLACK)
+             self.win.blit(subtext_surface, (WIDTH/2 - subtext_surface.get_width()/2, HEIGHT/2 + 20))
 
     def draw(self):
         if self.state == 'MENU':
@@ -203,7 +208,57 @@ class CheckersUI:
                     winner_text = f"{winner} Wins!"
                 self.draw_message(winner_text, "Click to return to menu")
 
+            self.draw_sidebar()
+
         pygame.display.update()
+
+    def draw_sidebar(self):
+        """Draw the sidebar with game info and bot visualization."""
+        sidebar_rect = pygame.Rect(BOARD_WIDTH, 0, WIDTH - BOARD_WIDTH, HEIGHT)
+        pygame.draw.rect(self.win, LIGHT_BLUE, sidebar_rect)
+        pygame.draw.rect(self.win, BLACK, sidebar_rect, 3) # Border
+
+        # Title
+        title = self.font_medium.render("Bot Visualization", True, BLACK)
+        self.win.blit(title, (BOARD_WIDTH + 20, 20))
+
+        if self.bot and hasattr(self.bot, 'last_decision_tree') and self.bot.last_decision_tree:
+            if self.bot_thinking:
+                 status = self.font_small.render("Thinking...", True, RED)
+                 self.win.blit(status, (BOARD_WIDTH + 20, 80))
+            else:
+                 status = self.font_small.render("Last Move Analysis", True, BLACK)
+                 self.win.blit(status, (BOARD_WIDTH + 20, 80))
+                 
+                 # Show nodes explored
+                 nodes_text = self.font_tiny.render(f"Nodes Explored: {self.bot.nodes_explored}", True, BLACK)
+                 self.win.blit(nodes_text, (BOARD_WIDTH + 20, 120))
+
+                 # Show Top Level Moves
+                 start_y = 160
+                 
+                 # Sort children by score descending
+                 # Note: children might be None or children scores might be None in some edge cases?
+                 # Minimax maximizes score.
+                 
+                 children = [c for c in self.bot.last_decision_tree.children if c.score is not None]
+                 children.sort(key=lambda x: x.score, reverse=True)
+                 
+                 # Limit to displaying top 10 to fit screen
+                 for i, child in enumerate(children[:12]):
+                     y_pos = start_y + i * 40
+                     
+                     move_str = f"{child.move[0]} -> {child.move[1]}"
+                     score_str = f"Score: {child.score}"
+                     
+                     text_color = BLACK
+                     if child.score == self.bot.last_decision_tree.score:
+                         text_color = GREEN # Highlight best move
+                     
+                     # Check if mouse hover (simple enhancement)
+                     
+                     move_text = self.font_tiny.render(f"{move_str}: {score_str}", True, text_color)
+                     self.win.blit(move_text, (BOARD_WIDTH + 20, y_pos))
 
     def handle_bot_move(self):
         """Let the bot make a move."""
@@ -249,14 +304,16 @@ class CheckersUI:
                     if not self.bot or self.game.current_turn == 'red':
                         if event.type == pygame.MOUSEBUTTONDOWN:
                             pos = pygame.mouse.get_pos()
-                            row, col = self.get_row_col_from_mouse(pos)
-                            piece = self.game.board.get_piece(row, col)
+                            # Check if click is on board
+                            if pos[0] < BOARD_WIDTH:
+                                row, col = self.get_row_col_from_mouse(pos)
+                                piece = self.game.board.get_piece(row, col)
 
-                            if piece and piece.color == self.game.current_turn:
-                                self.selected_piece = piece
-                                self.selected_pos = (row, col)
-                                self.dragging = True
-                                self.drag_pos = pos
+                                if piece and piece.color == self.game.current_turn:
+                                    self.selected_piece = piece
+                                    self.selected_pos = (row, col)
+                                    self.dragging = True
+                                    self.drag_pos = pos
 
                         elif event.type == pygame.MOUSEMOTION:
                             if self.dragging:

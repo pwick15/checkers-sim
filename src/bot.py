@@ -12,6 +12,13 @@ import random
 import copy
 
 
+
+class DecisionNode:
+    def __init__(self, move, score=None, children=None):
+        self.move = move
+        self.score = score
+        self.children = children if children is not None else []
+
 class BotPlayer(ABC):
     """Abstract base class for bot players."""
 
@@ -105,12 +112,17 @@ class MinimaxBot(BotPlayer):
         self.depth = depth
         self.nodes_explored = 0  # For educational purposes
 
+        self.last_decision_tree = None
+
     def get_move(self, game):
         """Get the best move using minimax algorithm."""
         self.nodes_explored = 0
         best_move = None
         best_score = float('-inf')
 
+        # Root of the decision tree for this move
+        self.last_decision_tree = DecisionNode(None)
+        
         moves = self.get_all_possible_moves(game)
 
         # Prioritize captures
@@ -123,16 +135,24 @@ class MinimaxBot(BotPlayer):
             game_copy = self._copy_game(game)
             game_copy.play_move(start_pos, end_pos)
 
+            # Create a node for this move
+            move_node = DecisionNode((start_pos, end_pos))
+            self.last_decision_tree.children.append(move_node)
+
             # Get score for this move
-            score = self._minimax(game_copy, self.depth - 1, False)
+            score = self._minimax(game_copy, self.depth - 1, False, move_node)
+            move_node.score = score
 
             if score > best_score:
                 best_score = score
                 best_move = (start_pos, end_pos)
-
+        
+        # Mark the root score
+        self.last_decision_tree.score = best_score
+        
         return best_move
 
-    def _minimax(self, game, depth, is_maximizing):
+    def _minimax(self, game, depth, is_maximizing, parent_node=None):
         """
         Recursive minimax algorithm.
 
@@ -140,6 +160,7 @@ class MinimaxBot(BotPlayer):
             game: Current game state
             depth: Remaining depth to search
             is_maximizing: True if maximizing player's turn, False otherwise
+            parent_node: The decision node in the tree structure
 
         Returns:
             int: Score of the position
@@ -163,7 +184,19 @@ class MinimaxBot(BotPlayer):
                         for end_pos in valid_moves:
                             game_copy = self._copy_game(game)
                             game_copy.play_move((r, c), end_pos)
-                            score = self._minimax(game_copy, depth - 1, False)
+                            
+                            # Create child node if tracking
+                            if parent_node is not None:
+                                child_node = DecisionNode(((r, c), end_pos))
+                                parent_node.children.append(child_node)
+                            else:
+                                child_node = None
+
+                            score = self._minimax(game_copy, depth - 1, False, child_node)
+                            
+                            if child_node:
+                                child_node.score = score
+
                             max_score = max(max_score, score)
 
             return max_score if max_score != float('-inf') else self._evaluate_board(game)
@@ -181,7 +214,19 @@ class MinimaxBot(BotPlayer):
                         for end_pos in valid_moves:
                             game_copy = self._copy_game(game)
                             game_copy.play_move((r, c), end_pos)
-                            score = self._minimax(game_copy, depth - 1, True)
+
+                            # Create child node if tracking
+                            if parent_node is not None:
+                                child_node = DecisionNode(((r, c), end_pos))
+                                parent_node.children.append(child_node)
+                            else:
+                                child_node = None
+
+                            score = self._minimax(game_copy, depth - 1, True, child_node)
+                            
+                            if child_node:
+                                child_node.score = score
+
                             min_score = min(min_score, score)
 
             return min_score if min_score != float('inf') else self._evaluate_board(game)
@@ -261,6 +306,9 @@ class AlphaBetaBot(MinimaxBot):
         alpha = float('-inf')
         beta = float('inf')
 
+        # Root of the decision tree for this move
+        self.last_decision_tree = DecisionNode(None)
+
         moves = self.get_all_possible_moves(game)
 
         # Prioritize captures
@@ -271,18 +319,24 @@ class AlphaBetaBot(MinimaxBot):
         for (start_pos, end_pos), _ in moves:
             game_copy = self._copy_game(game)
             game_copy.play_move(start_pos, end_pos)
+            
+            # Create a node for this move
+            move_node = DecisionNode((start_pos, end_pos))
+            self.last_decision_tree.children.append(move_node)
 
-            score = self._alpha_beta(game_copy, self.depth - 1, alpha, beta, False)
+            score = self._alpha_beta(game_copy, self.depth - 1, alpha, beta, False, move_node)
+            move_node.score = score
 
             if score > best_score:
                 best_score = score
                 best_move = (start_pos, end_pos)
 
             alpha = max(alpha, best_score)
-
+        
+        self.last_decision_tree.score = best_score
         return best_move
 
-    def _alpha_beta(self, game, depth, alpha, beta, is_maximizing):
+    def _alpha_beta(self, game, depth, alpha, beta, is_maximizing, parent_node=None):
         """
         Recursive alpha-beta pruning algorithm.
 
@@ -292,6 +346,7 @@ class AlphaBetaBot(MinimaxBot):
             alpha: Best score for maximizing player
             beta: Best score for minimizing player
             is_maximizing: True if maximizing player's turn
+            parent_node: The decision node in the tree structure
 
         Returns:
             int: Score of the position
@@ -312,7 +367,18 @@ class AlphaBetaBot(MinimaxBot):
                         for end_pos in valid_moves:
                             game_copy = self._copy_game(game)
                             game_copy.play_move((r, c), end_pos)
-                            score = self._alpha_beta(game_copy, depth - 1, alpha, beta, False)
+                            
+                            # Create child node if tracking
+                            if parent_node is not None:
+                                child_node = DecisionNode(((r, c), end_pos))
+                                parent_node.children.append(child_node)
+                            else:
+                                child_node = None
+
+                            score = self._alpha_beta(game_copy, depth - 1, alpha, beta, False, child_node)
+                            if child_node:
+                                child_node.score = score
+                            
                             max_score = max(max_score, score)
                             alpha = max(alpha, score)
 
@@ -333,7 +399,18 @@ class AlphaBetaBot(MinimaxBot):
                         for end_pos in valid_moves:
                             game_copy = self._copy_game(game)
                             game_copy.play_move((r, c), end_pos)
-                            score = self._alpha_beta(game_copy, depth - 1, alpha, beta, True)
+                            
+                            # Create child node if tracking
+                            if parent_node is not None:
+                                child_node = DecisionNode(((r, c), end_pos))
+                                parent_node.children.append(child_node)
+                            else:
+                                child_node = None
+
+                            score = self._alpha_beta(game_copy, depth - 1, alpha, beta, True, child_node)
+                            if child_node:
+                                child_node.score = score
+                            
                             min_score = min(min_score, score)
                             beta = min(beta, score)
 
