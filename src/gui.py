@@ -118,7 +118,9 @@ class CheckersUI:
         self.selected_pos = None # (row, col)
         self.dragging = False
         self.drag_pos = None # (x, y)
+        self.valid_destinations = set()
         self.state = 'MENU' # MENU, PLAYING, GAME_OVER
+        self.valid_destinations = set()
 
         # Professional fonts - fallback to default if unavailable
         try:
@@ -174,6 +176,12 @@ class CheckersUI:
 
         return (row, col)
 
+    def get_valid_destinations(self, piece, row, col):
+        """Return legal destination squares, respecting forced captures."""
+        valid_moves = self.game.board.get_valid_moves(piece, row, col)
+        capture_moves = {pos for pos, captured in valid_moves.items() if captured}
+        return capture_moves if capture_moves else set(valid_moves.keys())
+
     def create_menu_buttons(self):
         """Create menu button rectangles."""
         buttons = []
@@ -216,6 +224,7 @@ class CheckersUI:
         self.selected_pos = None
         self.dragging = False
         self.bot_thinking = False
+        self.valid_destinations = set()
 
         # Reset move trail
         self.last_move_from = None
@@ -279,6 +288,20 @@ class CheckersUI:
                     number_surface = notation_font.render(str(notation), True, number_color)
                     self.win.blit(number_surface, (col*SQUARE_SIZE + 3, row*SQUARE_SIZE + 2))
 
+    def draw_hover_highlight(self):
+        """Highlight the square under a dragged piece when it's a legal destination."""
+        if not (self.dragging and self.drag_pos and self.valid_destinations):
+            return
+
+        row, col = self.get_row_col_from_mouse(self.drag_pos)
+        if row < 0 or col < 0:
+            return
+
+        if (row, col) in self.valid_destinations:
+            highlight_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
+            highlight_surface.fill((HIGHLIGHT_COLOR[0], HIGHLIGHT_COLOR[1], HIGHLIGHT_COLOR[2], 110))
+            self.win.blit(highlight_surface, (col * SQUARE_SIZE, row * SQUARE_SIZE))
+
     def draw_pieces(self):
         for row in range(ROWS):
             for col in range(COLS):
@@ -303,23 +326,26 @@ class CheckersUI:
 
     def draw_menu(self):
         """Draw the game mode selection menu with professional styling."""
-        # Gradient-like background
-        self.win.fill(DARK_GREY)
+        # Darkened backdrop with a subtle glow
+        self.win.fill(SIDEBAR_BG)
 
-        # Draw lighter overlay for contrast
         overlay = pygame.Surface((WIDTH, HEIGHT))
-        overlay.fill(CREAM)
-        overlay.set_alpha(240)
+        overlay.fill((10, 10, 15))
+        overlay.set_alpha(120)
         self.win.blit(overlay, (0, 0))
+
+        glow = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (ACCENT_BLUE[0], ACCENT_BLUE[1], ACCENT_BLUE[2], 70), (WIDTH // 2, 200), 360)
+        self.win.blit(glow, (0, 0))
 
         # Title with shadow effect
         title_text = "CHECKERS AI"
-        title_shadow = self.font_large.render(title_text, True, GREY)
-        title = self.font_large.render(title_text, True, BLACK)
+        title_shadow = self.font_large.render(title_text, True, SIDEBAR_ACCENT)
+        title = self.font_large.render(title_text, True, WHITE)
         self.win.blit(title_shadow, (WIDTH//2 - title.get_width()//2 + 3, 53))
         self.win.blit(title, (WIDTH//2 - title.get_width()//2, 50))
 
-        subtitle = self.font_small.render("Select Game Mode", True, GREY)
+        subtitle = self.font_small.render("Select Game Mode", True, LIGHT_GREY)
         self.win.blit(subtitle, (WIDTH//2 - subtitle.get_width()//2, 140))
 
         # Draw buttons with modern styling
@@ -376,6 +402,7 @@ class CheckersUI:
         else:
             self.draw_squares()
             self.draw_pieces()
+            self.draw_hover_highlight()
 
             # Draw dragged piece last so it's on top
             if self.dragging and self.selected_piece:
@@ -687,6 +714,7 @@ class CheckersUI:
                                 if piece and piece.color == self.game.current_turn:
                                     self.selected_piece = piece
                                     self.selected_pos = (row, col)
+                                    self.valid_destinations = self.get_valid_destinations(piece, row, col)
                                     self.dragging = True
                                     self.drag_pos = pos
                     
@@ -713,6 +741,7 @@ class CheckersUI:
                             self.selected_piece = None
                             self.selected_pos = None
                             self.dragging = False
+                            self.valid_destinations = set()
 
                             if self.game.is_over():
                                 self.state = 'GAME_OVER'
