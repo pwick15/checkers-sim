@@ -1,12 +1,13 @@
 import pygame
 import sys
+from collections import deque
 from src.game import Game
 from src.piece import Piece
-from src.bot import RandomBot, MinimaxBot, AlphaBetaBot
+from src.bot import RandomBot, MinimaxBot, AlphaBetaBot, DecisionNode
 
-# Constants
-WIDTH, HEIGHT = 1200, 800
-BOARD_WIDTH = 800
+# Constants (window will be clamped to screen size at runtime)
+WIDTH, HEIGHT = 1380, 820
+BOARD_WIDTH = 480
 ROWS, COLS = 8, 8
 SQUARE_SIZE = BOARD_WIDTH // COLS
 
@@ -74,15 +75,19 @@ class TreeAnimator:
         # Get all nodes visited up to this frame
         visited_nodes_with_actions = self.traversal_sequence[:self.current_frame + 1]
         visited = set()
+        evaluated = set()
         for n, a in visited_nodes_with_actions:
             if a == 'visit':
                 visited.add(n)
+            if a == 'evaluate':
+                evaluated.add(n)
 
 
         return {
             'current_node': current_node,
             'action': action,
             'visited_nodes': visited,
+            'evaluated_nodes': evaluated,
             'total_frames': len(self.traversal_sequence),
             'current_frame': self.current_frame
         }
@@ -111,7 +116,10 @@ class CheckersUI:
     def __init__(self):
         pygame.init()
         pygame.font.init()
-        self.win = pygame.display.set_mode((WIDTH, HEIGHT))
+        display_info = pygame.display.Info()
+        window_w = min(WIDTH, display_info.current_w - 40)
+        window_h = min(HEIGHT, display_info.current_h - 80)
+        self.win = pygame.display.set_mode((window_w, window_h))
         pygame.display.set_caption('Checkers Simulator - AI Edition')
         self.game = Game()
         self.selected_piece = None
@@ -149,6 +157,8 @@ class CheckersUI:
 
         self.tree_animator = None  # TreeAnimator instance
         self.last_animation_update = 0  # timestamp for animation timing
+        self.window_width = window_w
+        self.window_height = window_h
 
     def pos_to_notation(self, row, col):
         """Convert (row, col) to checkers notation (1-32)."""
@@ -243,7 +253,8 @@ class CheckersUI:
         self.state = 'PLAYING'
 
     def draw_squares(self):
-        self.win.fill(WOOD) # Dark squares
+        board_rect = pygame.Rect(0, 0, BOARD_WIDTH, BOARD_WIDTH)
+        pygame.draw.rect(self.win, WOOD, board_rect) # Dark squares
 
         # Draw light squares
         for row in range(ROWS):
@@ -400,6 +411,7 @@ class CheckersUI:
         if self.state == 'MENU':
             self.draw_menu()
         else:
+            self.win.fill(SIDEBAR_BG)
             self.draw_squares()
             self.draw_pieces()
             self.draw_hover_highlight()
@@ -434,11 +446,12 @@ class CheckersUI:
 
     def draw_sidebar(self):
         """Draw sidebar with animated tree visualization"""
-        sidebar_rect = pygame.Rect(BOARD_WIDTH, 0, WIDTH - BOARD_WIDTH, HEIGHT)
+        sidebar_width = WIDTH - BOARD_WIDTH
+        sidebar_rect = pygame.Rect(BOARD_WIDTH, 0, sidebar_width, HEIGHT)
         pygame.draw.rect(self.win, SIDEBAR_BG, sidebar_rect)
 
         # Accent bar
-        accent_bar = pygame.Rect(BOARD_WIDTH, 0, WIDTH - BOARD_WIDTH, 5)
+        accent_bar = pygame.Rect(BOARD_WIDTH, 0, sidebar_width, 5)
         pygame.draw.rect(self.win, ACCENT_BLUE, accent_bar)
 
         # Title
@@ -466,13 +479,21 @@ class CheckersUI:
                         if self.tree_animator.current_frame >= len(self.tree_animator.traversal_sequence) - 1:
                             self.tree_animator.pause()  # Stop at end
 
+                algo_name = "Alpha-Beta Pruning" if isinstance(self.bot, AlphaBetaBot) else "Minimax"
+                depth_text = f"Depth: {getattr(self.bot, 'depth', 0)}"
+                algo_surface = self.font_small.render(algo_name, True, LIGHT_GREY)
+                depth_surface = self.font_tiny.render(depth_text, True, LIGHT_GREY)
+                self.win.blit(algo_surface, (BOARD_WIDTH + 20, 55))
+                self.win.blit(depth_surface, (BOARD_WIDTH + 20, 78))
+
                 # Draw three sections
-                self._draw_tree_view(BOARD_WIDTH + 20, 80, 360, 300)
-                self._draw_board_preview(BOARD_WIDTH + 20, 390, 360, 200)
-                self._draw_playback_controls(BOARD_WIDTH + 20, 600, 360, 180)
+                section_width = sidebar_width - 40
+                self._draw_tree_view(BOARD_WIDTH + 20, 120, section_width, 380)
+                self._draw_board_preview(BOARD_WIDTH + 20, 520, section_width, 160)
+                self._draw_playback_controls(BOARD_WIDTH + 20, 700, section_width, 170)
 
     def _draw_tree_view(self, x, y, width, height):
-        """Draw indented tree list with current node highlighted"""
+        """Draw stick-style tree: edges as lines, no node bubbles."""
         state = self.tree_animator.get_current_state()
         if not state:
             return
@@ -481,67 +502,169 @@ class CheckersUI:
         title = self.font_tiny.render("Search Tree Exploration", True, LIGHT_GREY)
         self.win.blit(title, (x, y))
 
-        # Scrollable tree view
-        tree_y = y + 30
-        indent_size = 15
-        row_height = 35
+        diagram_top = y + 28
+        diagram_height = height - 88  # leave room for legend/info
 
-        # Flatten tree for display
-        nodes_to_display = self._get_visible_nodes(self.bot.last_decision_tree, state['visited_nodes'])
+        max_depth = self._get_tree_depth(self.bot.last_decision_tree)
+        if max_depth < 1:
+            return
+        max_depth = min(max_depth, 6)
 
-        for i, (node, depth) in enumerate(nodes_to_display[:8]):  # Show top 8 nodes
-            node_y = tree_y + i * row_height
-            node_x = x + depth * indent_size
+        level_height = diagram_height / max(1, max_depth)
+        positions = self._layout_tree_positions(self.bot.last_decision_tree, x, width, diagram_top, level_height, max_depth)
 
-            # Determine colors
-            is_current = (node == state['current_node'])
-            is_visited = node in state['visited_nodes']
+        evaluated = state.get('evaluated_nodes', set())
+        current_edge = None
+        if state['current_node'] and state['current_node'] in positions:
+            parent = self._find_parent(self.bot.last_decision_tree, state['current_node'])
+            if parent in positions:
+                current_edge = (positions[parent], positions[state['current_node']])
 
-            if is_current:
-                bg_color = SIDEBAR_ACCENT
-                text_color = HIGHLIGHT_COLOR
-                pygame.draw.rect(self.win, bg_color,
-                               pygame.Rect(x, node_y - 2, width, row_height - 2),
-                               border_radius=4)
-            elif is_visited:
-                text_color = WHITE
-            else:
-                text_color = GREY
+        # Draw edges
+        line_surf = pygame.Surface((width, height), pygame.SRCALPHA)
+        for node, (nx, ny) in positions.items():
+            for child in node.children:
+                if child in positions:
+                    cx, cy = positions[child]
+                    is_pruned = child.is_pruned
+                    is_visited = child in state['visited_nodes']
 
-            # Draw node info
-            if node.move:
-                from_not = self.pos_to_notation(node.move[0][0], node.move[0][1])
-                to_not = self.pos_to_notation(node.move[1][0], node.move[1][1])
-                move_str = f"{from_not}→{to_not}"
-            else:
-                move_str = "Root"
+                    base_color = GREY
+                    if is_pruned:
+                        base_color = DARK_GREY
+                    elif current_edge and positions.get(node) == current_edge[0] and positions.get(child) == current_edge[1]:
+                        base_color = HIGHLIGHT_COLOR
+                    elif is_visited:
+                        base_color = (230, 183, 50)  # softer yellow for visited
 
-            score_str = f"{node.score:+d}" if node.score is not None else "..."
+                    offset_start = (nx - x, ny - y)
+                    offset_end = (cx - x, cy - y)
+                    pygame.draw.aaline(line_surf, base_color, offset_start, offset_end)
+                    pygame.draw.aaline(line_surf, base_color, (offset_start[0], offset_start[1]+1), (offset_end[0], offset_end[1]+1))
+        self.win.blit(line_surf, (x, y))
 
-            # Draw bullet and text
-            bullet = "►" if is_current else "•"
-            text = f"{bullet} {move_str}  {score_str}"
+        # Legend and current move info
+        legend_y = y + height - 52
+        legend_items = [
+            ("Current", HIGHLIGHT_COLOR),
+            ("Visited", (230, 183, 50)),
+            ("Pruned", DARK_GREY),
+            ("Unvisited", GREY),
+        ]
+        lx = x
+        for label, color in legend_items:
+            pygame.draw.rect(self.win, color, pygame.Rect(lx, legend_y, 12, 12), border_radius=2)
+            text_surface = self.font_tiny.render(label, True, LIGHT_GREY)
+            self.win.blit(text_surface, (lx + 16, legend_y - 2))
+            lx += text_surface.get_width() + 46
 
-            if node.is_pruned:
-                text += " (pruned)"
-                text_color = GREY
+        # Current edge details
+        info_y = legend_y + 18
+        current_node = state['current_node']
+        if current_node and current_node.move:
+            from_not = self.pos_to_notation(current_node.move[0][0], current_node.move[0][1])
+            to_not = self.pos_to_notation(current_node.move[1][0], current_node.move[1][1])
+            move_text = f"Edge: {from_not} → {to_not}"
+            score = current_node.score
+            score_text = "Score: evaluating..." if score is None else f"Score: {score:+d}"
+        else:
+            move_text = "Edge: Root"
+            score_text = ""
 
-            text_surface = self.font_tiny.render(text, True, text_color)
-            self.win.blit(text_surface, (node_x, node_y))
+        move_surface = self.font_tiny.render(move_text, True, WHITE)
+        self.win.blit(move_surface, (x, info_y))
+        if score_text:
+            score_surface = self.font_tiny.render(score_text, True, HIGHLIGHT_COLOR if score is None else LIGHT_GREY)
+            self.win.blit(score_surface, (x, info_y + 18))
 
-    def _get_visible_nodes(self, root, visited_nodes):
-        """Get nodes to display in tree view (DFS order)"""
-        result = []
-        self._collect_visible_nodes(root, 0, visited_nodes, result)
-        return result
+    def _get_tree_depth(self, root):
+        """Return max depth based on stored node depth."""
+        if not root:
+            return 0
+        max_depth = 0
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            max_depth = max(max_depth, getattr(node, 'depth', 0))
+            for child in node.children:
+                stack.append(child)
+        return max_depth
 
-    def _collect_visible_nodes(self, node, depth, visited_nodes, result):
-        """Recursive collection of nodes in DFS order"""
-        if node:
-            result.append((node, depth))
-            if node in visited_nodes:  # Only show children if visited
-                for child in node.children:
-                    self._collect_visible_nodes(child, depth + 1, visited_nodes, result)
+    def _layout_tree_positions(self, root, x_start, width, y_start, level_height, max_depth):
+        """Return positions for each node up to max_depth using subtree centering for symmetry."""
+        if not root:
+            return {}
+
+        subtree_leaves = {}
+
+        def count_leaves(node, depth):
+            if depth >= max_depth or not node.children:
+                subtree_leaves[node] = 1
+                return 1
+            total = 0
+            for child in node.children:
+                total += count_leaves(child, depth + 1)
+            subtree_leaves[node] = max(1, total)
+            return subtree_leaves[node]
+
+        count_leaves(root, 0)
+
+        positions = {}
+
+        def assign(node, depth, left, right):
+            x_center = left + (right - left) / 2
+            y = y_start + depth * level_height
+            positions[node] = (x_center, y)
+
+            if depth >= max_depth or not node.children:
+                return
+
+            span = right - left
+            total = sum(subtree_leaves.get(child, 1) for child in node.children)
+            cur_left = left
+            for child in node.children:
+                child_span = span * (subtree_leaves.get(child, 1) / total)
+                child_left = cur_left
+                child_right = cur_left + child_span
+                assign(child, depth + 1, child_left, child_right)
+                cur_left += child_span
+
+        assign(root, 0, x_start, x_start + width)
+        return positions
+
+    def _find_parent(self, root, target):
+        """Find parent of a target node (shallow search)."""
+        if not root or not target:
+            return None
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            for child in node.children:
+                if child is target:
+                    return node
+                stack.append(child)
+        return None
+
+    def _format_node_label(self, node):
+        """Return a short label for a node move."""
+        if getattr(node, "is_summary", False):
+            return f"+{node.overflow_count}"
+        if not node.move:
+            return "Root"
+
+        start, end = node.move
+        start_not = self.pos_to_notation(start[0], start[1]) or "-"
+        end_not = self.pos_to_notation(end[0], end[1]) or "-"
+        return f"{start_not}->{end_not}"
+
+    def _format_score(self, node):
+        if getattr(node, "is_summary", False):
+            return ""
+        if node.is_pruned and node.score is None:
+            return "pruned"
+        if node.score is None:
+            return "..."
+        return f"{node.score:+d}"
 
     def _draw_board_preview(self, x, y, width, height):
         """Draw miniature board showing current position"""
