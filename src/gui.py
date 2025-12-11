@@ -1,5 +1,7 @@
 import pygame
 import sys
+import json
+from pathlib import Path
 from collections import deque
 from src.game import Game
 from src.piece import Piece
@@ -686,6 +688,73 @@ class CheckersUI:
             return "..."
         return f"{node.score:+d}"
 
+    def _serialize_tree(self, root):
+        """Serialize decision tree and traversal frames to JSON-friendly dict."""
+        nodes = []
+        edges = []
+        id_map = {}
+
+        def walk(node):
+            idx = len(nodes)
+            id_map[node] = idx
+            move = node.move
+            move_notation = None
+            if move:
+                move_notation = {
+                    "from": self.pos_to_notation(move[0][0], move[0][1]),
+                    "to": self.pos_to_notation(move[1][0], move[1][1]),
+                }
+            nodes.append({
+                "id": idx,
+                "depth": getattr(node, "depth", 0),
+                "score": node.score,
+                "is_pruned": node.is_pruned,
+                "move": move,
+                "move_notation": move_notation
+            })
+            for child in node.children:
+                child_id = walk(child)
+                edges.append({"from": idx, "to": child_id, "is_pruned": child.is_pruned})
+            return idx
+
+        walk(root)
+
+        # Build traversal frames
+        animator = TreeAnimator(root)
+        animator.reconstruct_traversal()
+        frames = []
+        for node, action in animator.traversal_sequence:
+            parent = self._find_parent(root, node)
+            frames.append({
+                "edge": [id_map.get(parent), id_map.get(node)],
+                "action": action,
+                "node_score": node.score
+            })
+
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "frames": frames,
+        }
+
+    def export_tree_to_web(self):
+        """Write the latest decision tree to web/tree.json for the JS visualizer."""
+        if not self.bot or not self.bot.last_decision_tree:
+            return
+
+        data = self._serialize_tree(self.bot.last_decision_tree)
+        data["meta"] = {
+            "algorithm": "Alpha-Beta" if isinstance(self.bot, AlphaBetaBot) else "Minimax",
+            "depth": getattr(self.bot, "depth", None),
+            "nodes_explored": getattr(self.bot, "nodes_explored", None),
+        }
+
+        web_dir = Path(__file__).resolve().parent.parent / "web"
+        web_dir.mkdir(exist_ok=True)
+        out_path = web_dir / "tree.json"
+        with out_path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
     def _draw_board_preview(self, x, y, width, height):
         """Draw miniature board showing current position"""
         state = self.tree_animator.get_current_state()
@@ -794,6 +863,13 @@ class CheckersUI:
                     self.last_move_to = move[1]
 
             self.bot_thinking = False
+
+            # Export tree for web visualizer
+            try:
+                self.export_tree_to_web()
+            except Exception as e:
+                # Keep UI running even if export fails
+                print(f"Warning: could not export tree: {e}")
 
             if self.game.is_over():
                 self.state = 'GAME_OVER'

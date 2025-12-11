@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Checkers AI Tree Viewer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      margin: 0;
+      background: #0d0f15;
+      color: #e0e0e0;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+    #hud {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      padding: 10px 12px;
+      background: rgba(12, 14, 20, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(10px);
+      z-index: 2;
+      max-width: 360px;
+    }
+    #hud h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    #hud .meta {
+      margin: 6px 0 10px;
+      color: #9fb3c8;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    #controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 8px;
+    }
+    button, .pill {
+      background: #1c2330;
+      color: #e5ecf5;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #222c3d;
+    }
+    #status {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #d7e5ff;
+      line-height: 1.5;
+    }
+    #legend {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #b8c7dd;
+      flex-wrap: wrap;
+    }
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      margin-right: 6px;
+      display: inline-block;
+    }
+    #canvas {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <h1>AI Search Viewer</h1>
+    <div class="meta" id="meta">Waiting for tree.json…</div>
+    <div id="controls">
+      <button id="refresh">Refresh Tree</button>
+      <button id="play">Play</button>
+      <button id="pause">Pause</button>
+      <button id="stepBack">Step ←</button>
+      <button id="stepFwd">Step →</button>
+      <span class="pill" id="frameInfo">Frame 0 / 0</span>
+    </div>
+    <div id="legend">
+      <span><span class="swatch" style="background:#fbc02d"></span>Current</span>
+      <span><span class="swatch" style="background:#f5d77a"></span>Visited</span>
+      <span><span class="swatch" style="background:#2f3542"></span>Pruned</span>
+      <span><span class="swatch" style="background:#5a6475"></span>Unvisited</span>
+    </div>
+    <div id="status">Load a tree via tree.json (written by the Python app) and pan/zoom with your trackpad or mouse.</div>
+  </div>
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    let tree = null;
+    let positions = new Map();
+    let frames = [];
+    let nodes = [];
+    let frameIndex = 0;
+    let playing = false;
+    let lastTick = performance.now();
+    const frameDelay = 100; // ms
+
+    const viewport = {
+      scale: 0.5,
+      offsetX: 0,
+      offsetY: 0,
+      dragging: false,
+      dragStart: { x: 0, y: 0 },
+      startOffset: { x: 0, y: 0 },
+    };
+
+    const colors = {
+      current: "#fbc02d",
+      visited: "#f5d77a",
+      pruned: "#2f3542",
+      unvisited: "#5a6475",
+      bg: "#0d0f15",
+    };
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      draw();
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function layoutTree(tree) {
+      const children = new Map();
+      tree.nodes.forEach(n => children.set(n.id, []));
+      tree.edges.forEach(e => children.get(e.from).push(e.to));
+
+      const subtreeSize = new Map();
+      function count(id) {
+        const kids = children.get(id) || [];
+        if (!kids.length) {
+          subtreeSize.set(id, 1);
+          return 1;
+        }
+        let total = 0;
+        for (const c of kids) total += count(c);
+        subtreeSize.set(id, Math.max(1, total));
+        return subtreeSize.get(id);
+      }
+      count(0);
+
+      const pos = new Map();
+      function assign(id, depth, left, right) {
+        const x = left + (right - left) / 2;
+        const y = depth * 120;
+        pos.set(id, { x, y });
+        const kids = children.get(id) || [];
+        if (!kids.length) return;
+        const span = right - left;
+        const total = kids.reduce((acc, c) => acc + (subtreeSize.get(c) || 1), 0);
+        let cur = left;
+        for (const c of kids) {
+          const share = span * ((subtreeSize.get(c) || 1) / total);
+          assign(c, depth + 1, cur, cur + share);
+          cur += share;
+        }
+      }
+      assign(0, 0, 0, 3000);
+      return pos;
+    }
+
+    function fitView() {
+      if (!positions.size) return;
+      const xs = [...positions.values()].map(p => p.x);
+      const ys = [...positions.values()].map(p => p.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const spanX = maxX - minX || 1;
+      const spanY = maxY - minY || 1;
+      const pad = 40;
+      const scaleX = (canvas.width - pad * 2) / spanX;
+      const scaleY = (canvas.height - pad * 2) / spanY;
+      viewport.scale = Math.min(scaleX, scaleY) * 0.9;
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      viewport.offsetX = canvas.width / 2 - centerX * viewport.scale;
+      viewport.offsetY = canvas.height / 3 - centerY * viewport.scale;
+    }
+
+    function clearScene() {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = colors.bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function draw() {
+      clearScene();
+      if (!tree) return;
+
+      ctx.save();
+      ctx.translate(viewport.offsetX, viewport.offsetY);
+      ctx.scale(viewport.scale, viewport.scale);
+
+      const visited = new Set();
+      const current = frames[frameIndex] || null;
+      for (let i = 0; i <= frameIndex; i++) {
+        const f = frames[i];
+        if (f && f.edge && f.edge[0] != null && f.edge[1] != null) {
+          visited.add(`${f.edge[0]}-${f.edge[1]}`);
+        }
+      }
+
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.lineCap = "round";
+
+      for (const e of tree.edges) {
+        const from = positions.get(e.from);
+        const to = positions.get(e.to);
+        if (!from || !to) continue;
+        const key = `${e.from}-${e.to}`;
+        const isCurrent = current && current.edge && key === `${current.edge[0]}-${current.edge[1]}`;
+        const isVisited = visited.has(key);
+        let color = colors.unvisited;
+        if (e.is_pruned) color = colors.pruned;
+        else if (isCurrent) color = colors.current;
+        else if (isVisited) color = colors.visited;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      updateHud();
+    }
+
+    function updateHud(meta) {
+      const frameInfo = document.getElementById("frameInfo");
+      frameInfo.textContent = `Frame ${frames.length ? Math.min(frameIndex + 1, frames.length) : 0} / ${frames.length}`;
+      if (meta) {
+        document.getElementById("meta").textContent = `${meta.algorithm || "Algorithm"} | depth ${meta.depth ?? "?"} | nodes ${nodes.length}`;
+      }
+      const status = document.getElementById("status");
+      const current = frames[frameIndex] || null;
+      if (current && current.edge) {
+        const child = nodes.find(n => n.id === current.edge[1]);
+        const move = child?.move_notation;
+        const moveText = move ? `${move.from} → ${move.to}` : "Root";
+        const scoreText = current.node_score == null ? "pending" : `${current.node_score}`;
+        status.textContent = `Branch being searched: ${moveText} | Evaluation: ${scoreText}`;
+      } else {
+        status.textContent = "Ready. Pan/zoom to explore the tree.";
+      }
+    }
+
+    async function loadTree() {
+      const metaEl = document.getElementById("meta");
+      metaEl.textContent = "Loading tree.json…";
+      try {
+        const res = await fetch(`tree.json?ts=${Date.now()}`);
+        if (!res.ok) throw new Error("tree.json not found");
+        const data = await res.json();
+        tree = data;
+        nodes = data.nodes || [];
+        frames = data.frames || [];
+        positions = layoutTree(data);
+        fitView();
+        frameIndex = 0;
+        metaEl.textContent = `${data.meta?.algorithm || "Algorithm"} | depth ${data.meta?.depth ?? "?"} | nodes ${nodes.length}`;
+        draw();
+      } catch (err) {
+        metaEl.textContent = "tree.json not found. Run the Python app and make a bot move to export.";
+        console.error(err);
+      }
+    }
+
+    // Controls
+    document.getElementById("refresh").onclick = loadTree;
+    document.getElementById("play").onclick = () => { playing = true; };
+    document.getElementById("pause").onclick = () => { playing = false; };
+    document.getElementById("stepFwd").onclick = () => {
+      playing = false;
+      frameIndex = Math.min(frames.length - 1, frameIndex + 1);
+      draw();
+    };
+    document.getElementById("stepBack").onclick = () => {
+      playing = false;
+      frameIndex = Math.max(0, frameIndex - 1);
+      draw();
+    };
+
+    // Interaction: pan/zoom
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const { offsetX, offsetY, deltaY } = e;
+      const zoom = Math.exp(-deltaY * 0.001);
+      const wx = (offsetX - viewport.offsetX) / viewport.scale;
+      const wy = (offsetY - viewport.offsetY) / viewport.scale;
+      viewport.scale *= zoom;
+      viewport.offsetX = offsetX - wx * viewport.scale;
+      viewport.offsetY = offsetY - wy * viewport.scale;
+      draw();
+    }, { passive: false });
+
+    canvas.addEventListener("pointerdown", (e) => {
+      viewport.dragging = true;
+      viewport.dragStart = { x: e.clientX, y: e.clientY };
+      viewport.startOffset = { x: viewport.offsetX, y: viewport.offsetY };
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!viewport.dragging) return;
+      const dx = e.clientX - viewport.dragStart.x;
+      const dy = e.clientY - viewport.dragStart.y;
+      viewport.offsetX = viewport.startOffset.x + dx;
+      viewport.offsetY = viewport.startOffset.y + dy;
+      draw();
+    });
+    canvas.addEventListener("pointerup", (e) => {
+      viewport.dragging = false;
+      canvas.releasePointerCapture(e.pointerId);
+    });
+    canvas.addEventListener("pointerleave", () => {
+      viewport.dragging = false;
+    });
+
+    function tick(now) {
+      if (playing && frames.length && now - lastTick > frameDelay) {
+        lastTick = now;
+        frameIndex = Math.min(frames.length - 1, frameIndex + 1);
+        draw();
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    loadTree();
+  </script>
+</body>
+</html>
