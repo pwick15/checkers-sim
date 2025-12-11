@@ -64,6 +64,24 @@
       color: #d7e5ff;
       line-height: 1.5;
     }
+    #topMoves {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #e0e6f0;
+      line-height: 1.4;
+    }
+    #topMoves h2 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      color: #bcd2ff;
+    }
+    #topMoves ul {
+      margin: 0;
+      padding-left: 16px;
+    }
+    #topMoves li {
+      margin: 2px 0;
+    }
     #legend {
       display: flex;
       gap: 10px;
@@ -95,6 +113,8 @@
       <button id="play">Play</button>
       <button id="pause">Pause</button>
       <button id="stepBack">Step ←</button>
+      <button id="zoomIn">Zoom +</button>
+      <button id="zoomOut">Zoom -</button>
       <button id="stepFwd">Step →</button>
       <span class="pill" id="frameInfo">Frame 0 / 0</span>
     </div>
@@ -103,6 +123,12 @@
       <span><span class="swatch" style="background:#f5d77a"></span>Visited</span>
       <span><span class="swatch" style="background:#2f3542"></span>Pruned</span>
       <span><span class="swatch" style="background:#5a6475"></span>Unvisited</span>
+    </div>
+    <div id="topMoves">
+      <h2>Top 5 candidate moves</h2>
+      <ul id="moveList">
+        <li>Waiting for tree…</li>
+      </ul>
     </div>
     <div id="status">Load a tree via tree.json (written by the Python app) and pan/zoom with your trackpad or mouse.</div>
   </div>
@@ -120,6 +146,8 @@
     let playing = false;
     let lastTick = performance.now();
     const frameDelay = 100; // ms
+    let metaInfo = null;
+    const nodeById = new Map();
 
     const viewport = {
       scale: 0.5,
@@ -136,6 +164,11 @@
       pruned: "#2f3542",
       unvisited: "#5a6475",
       bg: "#0d0f15",
+      boardLight: "#f6e9d5",
+      boardDark: "#8b5a2b",
+      redPiece: "#d63c24",
+      blackPiece: "#1c1c1c",
+      king: "#fbc02d"
     };
 
     function resize() {
@@ -250,7 +283,42 @@
       }
 
       ctx.restore();
+      drawBoardOverlay();
       updateHud();
+    }
+
+    function drawBoardOverlay() {
+      if (!metaInfo || !metaInfo.board) return;
+      const size = 220;
+      const cell = size / 8;
+      const margin = 12;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.translate(margin, margin);
+      ctx.fillStyle = "rgba(10,12,18,0.6)";
+      ctx.fillRect(-4, -4, size + 8, size + 8);
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const isDark = (r + c) % 2 === 1;
+          ctx.fillStyle = isDark ? colors.boardDark : colors.boardLight;
+          ctx.fillRect(c * cell, r * cell, cell, cell);
+          const piece = metaInfo.board[r][c];
+          if (piece) {
+            ctx.beginPath();
+            ctx.fillStyle = piece.color === "red" ? colors.redPiece : colors.blackPiece;
+            ctx.arc(c * cell + cell / 2, r * cell + cell / 2, cell * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+            if (piece.king) {
+              ctx.fillStyle = colors.king;
+              ctx.beginPath();
+              ctx.arc(c * cell + cell / 2, r * cell + cell / 2, cell * 0.2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+      }
+      ctx.restore();
     }
 
     function updateHud(meta) {
@@ -258,6 +326,7 @@
       frameInfo.textContent = `Frame ${frames.length ? Math.min(frameIndex + 1, frames.length) : 0} / ${frames.length}`;
       if (meta) {
         document.getElementById("meta").textContent = `${meta.algorithm || "Algorithm"} | depth ${meta.depth ?? "?"} | nodes ${nodes.length}`;
+        metaInfo = meta;
       }
       const status = document.getElementById("status");
       const current = frames[frameIndex] || null;
@@ -270,6 +339,7 @@
       } else {
         status.textContent = "Ready. Pan/zoom to explore the tree.";
       }
+      updateTopMoves();
     }
 
     async function loadTree() {
@@ -281,11 +351,14 @@
         const data = await res.json();
         tree = data;
         nodes = data.nodes || [];
+        nodeById.clear();
+        nodes.forEach(n => nodeById.set(n.id, n));
         frames = data.frames || [];
         positions = layoutTree(data);
         fitView();
         frameIndex = 0;
         metaEl.textContent = `${data.meta?.algorithm || "Algorithm"} | depth ${data.meta?.depth ?? "?"} | nodes ${nodes.length}`;
+        metaInfo = data.meta || null;
         draw();
       } catch (err) {
         metaEl.textContent = "tree.json not found. Run the Python app and make a bot move to export.";
@@ -297,6 +370,14 @@
     document.getElementById("refresh").onclick = loadTree;
     document.getElementById("play").onclick = () => { playing = true; };
     document.getElementById("pause").onclick = () => { playing = false; };
+    document.getElementById("zoomIn").onclick = () => {
+      viewport.scale *= 1.35;
+      draw();
+    };
+    document.getElementById("zoomOut").onclick = () => {
+      viewport.scale /= 1.35;
+      draw();
+    };
     document.getElementById("stepFwd").onclick = () => {
       playing = false;
       frameIndex = Math.min(frames.length - 1, frameIndex + 1);
@@ -342,6 +423,47 @@
     canvas.addEventListener("pointerleave", () => {
       viewport.dragging = false;
     });
+
+    function updateTopMoves() {
+      if (!nodes.length) return;
+      const list = document.getElementById("moveList");
+      const rootChildren = nodes.filter(n => n.depth === 1);
+      if (!rootChildren.length) {
+        list.innerHTML = "<li>No moves found</li>";
+        return;
+      }
+      const scores = new Map();
+      for (const n of rootChildren) {
+        scores.set(n.id, null);
+      }
+      for (let i = 0; i <= frameIndex; i++) {
+        const f = frames[i];
+        if (f && f.edge) {
+          const childId = f.edge[1];
+          if (scores.has(childId) && f.node_score != null) {
+            scores.set(childId, f.node_score);
+          }
+        }
+      }
+      const sorted = rootChildren
+        .map(n => ({ n, score: scores.get(n.id) }))
+        .sort((a, b) => {
+          if (a.score == null && b.score == null) return 0;
+          if (a.score == null) return 1;
+          if (b.score == null) return -1;
+          return b.score - a.score;
+        })
+        .slice(0, 5);
+
+      list.innerHTML = "";
+      for (const { n, score } of sorted) {
+        const li = document.createElement("li");
+        const mv = n.move_notation;
+        const textMove = mv ? `${mv.from} → ${mv.to}` : "Root";
+        li.textContent = `${textMove} — ${score == null ? "pending" : score}`;
+        list.appendChild(li);
+      }
+    }
 
     function tick(now) {
       if (playing && frames.length && now - lastTick > frameDelay) {

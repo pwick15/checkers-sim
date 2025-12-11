@@ -737,6 +737,22 @@ class CheckersUI:
             "frames": frames,
         }
 
+    def _serialize_board(self):
+        grid = []
+        for r in range(8):
+            row = []
+            for c in range(8):
+                piece = self.game.board.get_piece(r, c)
+                if piece:
+                    row.append({
+                        "color": piece.color,
+                        "king": piece.is_king
+                    })
+                else:
+                    row.append(None)
+            grid.append(row)
+        return grid
+
     def export_tree_to_web(self):
         """Write the latest decision tree to web/tree.json for the JS visualizer."""
         if not self.bot or not self.bot.last_decision_tree:
@@ -747,6 +763,8 @@ class CheckersUI:
             "algorithm": "Alpha-Beta" if isinstance(self.bot, AlphaBetaBot) else "Minimax",
             "depth": getattr(self.bot, "depth", None),
             "nodes_explored": getattr(self.bot, "nodes_explored", None),
+            "board": self._serialize_board(),
+            "current_turn": self.game.current_turn,
         }
 
         web_dir = Path(__file__).resolve().parent.parent / "web"
