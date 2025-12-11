@@ -488,9 +488,15 @@ class CheckersUI:
 
                 # Draw three sections
                 section_width = sidebar_width - 40
-                self._draw_tree_view(BOARD_WIDTH + 20, 120, section_width, 380)
-                self._draw_board_preview(BOARD_WIDTH + 20, 520, section_width, 160)
-                self._draw_playback_controls(BOARD_WIDTH + 20, 700, section_width, 170)
+                tree_height = 300
+                preview_height = 140
+                controls_height = 140
+                tree_y = 120
+                preview_y = tree_y + tree_height + 16
+                controls_y = preview_y + preview_height + 16
+                self._draw_tree_view(BOARD_WIDTH + 20, tree_y, section_width, tree_height)
+                self._draw_board_preview(BOARD_WIDTH + 20, preview_y, section_width, preview_height)
+                self._draw_playback_controls(BOARD_WIDTH + 20, controls_y, section_width, controls_height)
 
     def _draw_tree_view(self, x, y, width, height):
         """Draw stick-style tree: edges as lines, no node bubbles."""
@@ -512,6 +518,20 @@ class CheckersUI:
 
         level_height = diagram_height / max(1, max_depth)
         positions = self._layout_tree_positions(self.bot.last_decision_tree, x, width, diagram_top, level_height, max_depth)
+
+        # Normalize horizontally if the tree spills
+        if positions:
+            xs = [p[0] for p in positions.values()]
+            min_x, max_x = min(xs), max(xs)
+            span = max(1, max_x - min_x)
+            available = width - 20
+            scale = min(1.0, available / span)
+            if scale < 1.0 or min_x < x + 10 or max_x > x + width - 10:
+                shifted = {}
+                for node, (px, py) in positions.items():
+                    nx = x + 10 + (px - min_x) * scale
+                    shifted[node] = (nx, py)
+                positions = shifted
 
         evaluated = state.get('evaluated_nodes', set())
         current_edge = None
@@ -564,11 +584,11 @@ class CheckersUI:
         if current_node and current_node.move:
             from_not = self.pos_to_notation(current_node.move[0][0], current_node.move[0][1])
             to_not = self.pos_to_notation(current_node.move[1][0], current_node.move[1][1])
-            move_text = f"Edge: {from_not} → {to_not}"
+            move_text = f"Branch being searched: {from_not} → {to_not}"
             score = current_node.score
-            score_text = "Score: evaluating..." if score is None else f"Score: {score:+d}"
+            score_text = "Evaluation pending..." if score is None else f"Evaluation: {score:+d}"
         else:
-            move_text = "Edge: Root"
+            move_text = "Branch being searched: Root"
             score_text = ""
 
         move_surface = self.font_tiny.render(move_text, True, WHITE)
@@ -673,7 +693,7 @@ class CheckersUI:
             return
 
         # Section title
-        title = self.font_tiny.render("Current Position", True, LIGHT_GREY)
+        title = self.font_tiny.render("Board after current branch", True, LIGHT_GREY)
         self.win.blit(title, (x, y))
 
         current_node = state['current_node']
@@ -682,8 +702,8 @@ class CheckersUI:
         if current_node.move:
             from_not = self.pos_to_notation(current_node.move[0][0], current_node.move[0][1])
             to_not = self.pos_to_notation(current_node.move[1][0], current_node.move[1][1])
-            move_text = f"Evaluating: {from_not} → {to_not}"
-            score_text = f"Score: {current_node.score}" if current_node.score is not None else "Score: evaluating..."
+            move_text = f"Move being evaluated: {from_not} → {to_not}"
+            score_text = f"Result: {current_node.score}" if current_node.score is not None else "Result: evaluating..."
         else:
             move_text = "Starting position"
             score_text = ""
