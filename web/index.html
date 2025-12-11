@@ -115,6 +115,9 @@
       <button id="stepBack">Step ←</button>
       <button id="zoomIn">Zoom +</button>
       <button id="zoomOut">Zoom -</button>
+      <button id="speedUp">Speed +</button>
+      <button id="speedDown">Speed -</button>
+      <button id="toggleBoard">Show Board</button>
       <button id="stepFwd">Step →</button>
       <span class="pill" id="frameInfo">Frame 0 / 0</span>
     </div>
@@ -145,9 +148,10 @@
     let frameIndex = 0;
     let playing = false;
     let lastTick = performance.now();
-    const frameDelay = 100; // ms
+    let frameDelay = 60; // ms (faster default)
     let metaInfo = null;
     const nodeById = new Map();
+    let boardVisible = false;
 
     const viewport = {
       scale: 0.5,
@@ -288,15 +292,17 @@
     }
 
     function drawBoardOverlay() {
-      if (!metaInfo || !metaInfo.board) return;
-      const size = 220;
+      if (!boardVisible || !metaInfo || !metaInfo.board) return;
+      const size = 170;
       const cell = size / 8;
-      const margin = 12;
+      const margin = 16;
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.translate(margin, margin);
-      ctx.fillStyle = "rgba(10,12,18,0.6)";
-      ctx.fillRect(-4, -4, size + 8, size + 8);
+      const x = margin;
+      const y = canvas.height - size - margin;
+      ctx.translate(x, y);
+      ctx.fillStyle = "rgba(10,12,18,0.78)";
+      ctx.fillRect(-6, -6, size + 12, size + 12);
 
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
@@ -378,6 +384,17 @@
       viewport.scale /= 1.35;
       draw();
     };
+    document.getElementById("speedUp").onclick = () => {
+      frameDelay = Math.max(10, frameDelay * 0.7);
+    };
+    document.getElementById("speedDown").onclick = () => {
+      frameDelay = frameDelay * 1.4;
+    };
+    document.getElementById("toggleBoard").onclick = (e) => {
+      boardVisible = !boardVisible;
+      e.target.textContent = boardVisible ? "Hide Board" : "Show Board";
+      draw();
+    };
     document.getElementById("stepFwd").onclick = () => {
       playing = false;
       frameIndex = Math.min(frames.length - 1, frameIndex + 1);
@@ -427,26 +444,41 @@
     function updateTopMoves() {
       if (!nodes.length) return;
       const list = document.getElementById("moveList");
-      const rootChildren = nodes.filter(n => n.depth === 1);
+      // Root children = edges directly from root id 0
+      const rootChildrenIds = tree.edges.filter(e => e.from === 0).map(e => e.to);
+      const rootChildren = rootChildrenIds.map(id => nodeById.get(id)).filter(Boolean);
       if (!rootChildren.length) {
         list.innerHTML = "<li>No moves found</li>";
         return;
       }
-      const scores = new Map();
-      for (const n of rootChildren) {
-        scores.set(n.id, null);
+      // Parent map to find the root-child ancestor for any node
+      const parentOf = new Map();
+      for (const e of tree.edges) parentOf.set(e.to, e.from);
+      function findRootChild(nodeId) {
+        let cur = nodeId;
+        while (cur != null && cur !== 0) {
+          const p = parentOf.get(cur);
+          if (p === 0) return cur;
+          cur = p;
+        }
+        return null;
       }
+
+      // Track best score per root child (max seen), seeded with node.score
+      const bestScores = new Map();
+      for (const n of rootChildren) bestScores.set(n.id, n.score);
       for (let i = 0; i <= frameIndex; i++) {
         const f = frames[i];
-        if (f && f.edge) {
-          const childId = f.edge[1];
-          if (scores.has(childId) && f.node_score != null) {
-            scores.set(childId, f.node_score);
+        if (f && f.edge && f.node_score != null) {
+          const rc = findRootChild(f.edge[1]);
+          if (rc != null && bestScores.has(rc)) {
+            const prev = bestScores.get(rc);
+            bestScores.set(rc, prev == null ? f.node_score : Math.max(prev, f.node_score));
           }
         }
       }
       const sorted = rootChildren
-        .map(n => ({ n, score: scores.get(n.id) }))
+        .map(n => ({ n, score: bestScores.get(n.id) }))
         .sort((a, b) => {
           if (a.score == null && b.score == null) return 0;
           if (a.score == null) return 1;
