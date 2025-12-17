@@ -1,2 +1,5 @@
-pytest
+# requirements.in
 pygame
+pytest
+fastapi
+uvicorn[standard]

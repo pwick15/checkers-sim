@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Checkers AI Tree Viewer</title>
+  <title>Checkers AI</title>
   <style>
     :root {
       color-scheme: dark;
@@ -12,31 +12,41 @@
       background: #0d0f15;
       color: #e0e0e0;
       font-family: "Inter", system-ui, -apple-system, sans-serif;
-      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    #game-container {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    #main-canvas {
+      border: 2px solid #2f3542;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     }
     #hud {
-      position: fixed;
-      top: 12px;
-      left: 12px;
-      padding: 10px 12px;
+      width: 400px;
+      padding: 15px 20px;
       background: rgba(12, 14, 20, 0.72);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
       backdrop-filter: blur(10px);
       z-index: 2;
-      max-width: 360px;
     }
     #hud h1 {
       margin: 0;
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 700;
       letter-spacing: 0.4px;
     }
     #hud .meta {
       margin: 6px 0 10px;
       color: #9fb3c8;
-      font-size: 13px;
+      font-size: 14px;
       line-height: 1.4;
     }
     #controls {
@@ -51,137 +61,298 @@
       color: #e5ecf5;
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 8px;
-      padding: 6px 10px;
-      font-size: 13px;
+      padding: 8px 12px;
+      font-size: 14px;
       cursor: pointer;
     }
     button:hover {
       background: #222c3d;
     }
     #status {
-      margin-top: 8px;
-      font-size: 13px;
+      margin-top: 12px;
+      font-size: 14px;
       color: #d7e5ff;
       line-height: 1.5;
+      min-height: 40px;
     }
-    #topMoves {
-      margin-top: 10px;
-      font-size: 13px;
-      color: #e0e6f0;
-      line-height: 1.4;
+    #tree-viewer-container {
+        display: none; /* Initially hidden */
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8);
+        backdrop-filter: blur(5px);
+        z-index: 10;
+        justify-content: center;
+        align-items: center;
     }
-    #topMoves h2 {
-      margin: 0 0 4px;
-      font-size: 14px;
-      color: #bcd2ff;
-    }
-    #topMoves ul {
-      margin: 0;
-      padding-left: 16px;
-    }
-    #topMoves li {
-      margin: 2px 0;
-    }
-    #legend {
-      display: flex;
-      gap: 10px;
-      margin-top: 8px;
-      font-size: 12px;
-      color: #b8c7dd;
-      flex-wrap: wrap;
-    }
-    .swatch {
-      width: 12px;
-      height: 12px;
-      border-radius: 3px;
-      margin-right: 6px;
-      display: inline-block;
-    }
-    #canvas {
-      width: 100vw;
-      height: 100vh;
-      display: block;
+    #tree-canvas {
+        max-width: 90vw;
+        max-height: 90vh;
+        border-radius: 10px;
     }
   </style>
 </head>
 <body>
-  <div id="hud">
-    <h1>AI Search Viewer</h1>
-    <div class="meta" id="meta">Waiting for tree.json…</div>
-    <div id="controls">
-      <button id="refresh">Refresh Tree</button>
-      <button id="play">Play</button>
-      <button id="pause">Pause</button>
-      <button id="stepBack">Step ←</button>
-      <button id="zoomIn">Zoom +</button>
-      <button id="zoomOut">Zoom -</button>
-      <button id="speedUp">Speed +</button>
-      <button id="speedDown">Speed -</button>
-      <button id="toggleBoard">Show Board</button>
-      <button id="stepFwd">Step →</button>
-      <span class="pill" id="frameInfo">Frame 0 / 0</span>
+
+  <div id="game-container">
+    <canvas id="main-canvas" width="600" height="600"></canvas>
+    <div id="hud">
+      <h1>Checkers AI</h1>
+      <div class="meta" id="meta"></div>
+      <div id="controls">
+        <button id="newGame">New Game</button>
+        <button id="showTree" disabled>Show AI Tree</button>
+      </div>
+      <div id="status">Welcome! Click "New Game" to start.</div>
     </div>
-    <div id="legend">
-      <span><span class="swatch" style="background:#fbc02d"></span>Current</span>
-      <span><span class="swatch" style="background:#f5d77a"></span>Visited</span>
-      <span><span class="swatch" style="background:#2f3542"></span>Pruned</span>
-      <span><span class="swatch" style="background:#5a6475"></span>Unvisited</span>
-    </div>
-    <div id="topMoves">
-      <h2>Top 5 candidate moves</h2>
-      <ul id="moveList">
-        <li>Waiting for tree…</li>
-      </ul>
-    </div>
-    <div id="status">Load a tree via tree.json (written by the Python app) and pan/zoom with your trackpad or mouse.</div>
   </div>
-  <canvas id="canvas"></canvas>
+
+  <div id="tree-viewer-container">
+      <canvas id="tree-canvas"></canvas>
+  </div>
+
 
   <script>
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
+    const mainCanvas = document.getElementById("main-canvas");
+    const mainCtx = mainCanvas.getContext("2d");
 
-    let tree = null;
-    let positions = new Map();
-    let frames = [];
-    let nodes = [];
-    let frameIndex = 0;
-    let playing = false;
-    let lastTick = performance.now();
-    let frameDelay = 60; // ms (faster default)
-    let metaInfo = null;
-    const nodeById = new Map();
-    let boardVisible = false;
+    const treeCanvas = document.getElementById("tree-canvas");
+    const treeCtx = treeCanvas.getContext("2d");
+    const treeContainer = document.getElementById("tree-viewer-container");
 
-    const viewport = {
-      scale: 0.5,
-      offsetX: 0,
-      offsetY: 0,
-      dragging: false,
-      dragStart: { x: 0, y: 0 },
-      startOffset: { x: 0, y: 0 },
-    };
+    const SQUARE_SIZE = mainCanvas.width / 8;
+
+    let gameId = null;
+    let board = null;
+    let currentTurn = null;
+    let winner = null;
+    let selectedPiece = null;
+    let validMoves = [];
+    let lastTree = null;
 
     const colors = {
-      current: "#fbc02d",
-      visited: "#f5d77a",
-      pruned: "#2f3542",
-      unvisited: "#5a6475",
-      bg: "#0d0f15",
       boardLight: "#f6e9d5",
       boardDark: "#8b5a2b",
       redPiece: "#d63c24",
       blackPiece: "#1c1c1c",
-      king: "#fbc02d"
+      king: "#fbc02d",
+      validMove: "rgba(46, 125, 50, 0.5)",
+      selected: "rgba(255, 193, 7, 0.5)",
     };
 
-    function resize() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      draw();
+    async function newGame() {
+      try {
+        const response = await fetch("/api/game", { method: "POST" });
+        const data = await response.json();
+        gameId = data.game_id;
+        await updateGameState();
+        document.getElementById("status").textContent = "New game started. Red's turn.";
+        document.getElementById("showTree").disabled = true;
+      } catch (error) {
+        console.error("Error starting new game:", error);
+        document.getElementById("status").textContent = "Error starting game.";
+      }
     }
-    window.addEventListener("resize", resize);
-    resize();
+
+    async function updateGameState() {
+      if (!gameId) return;
+      try {
+        const response = await fetch(`/api/game/${gameId}`);
+        const data = await response.json();
+        board = data.board;
+        currentTurn = data.current_turn;
+        winner = data.winner;
+        drawBoard();
+        if (winner) {
+            document.getElementById("status").textContent = `Game Over! ${winner.charAt(0).toUpperCase() + winner.slice(1)} wins.`;
+        } else if (currentTurn === 'black') {
+            document.getElementById("status").textContent = "Bot is thinking...";
+            setTimeout(botMove, 500);
+        }
+      } catch (error) {
+        console.error("Error fetching game state:", error);
+      }
+    }
+
+    async function playMove(startPos, endPos) {
+        try {
+            const response = await fetch(`/api/game/${gameId}/move`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ start_pos: startPos, end_pos: endPos }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || "Invalid move");
+            }
+            await updateGameState();
+        } catch (error) {
+            console.error("Error playing move:", error);
+            document.getElementById("status").textContent = `Error: ${error.message}`;
+            // Reset selection on invalid move
+            selectedPiece = null;
+            validMoves = [];
+            drawBoard();
+        }
+    }
+
+    async function botMove() {
+        try {
+            const response = await fetch(`/api/game/${gameId}/bot-move`, { method: "POST" });
+            const data = await response.json();
+            lastTree = data.tree;
+            await updateGameState();
+            document.getElementById("status").textContent = "Bot has moved. Your turn.";
+            document.getElementById("showTree").disabled = !lastTree;
+        } catch (error) {
+            console.error("Error getting bot move:", error);
+        }
+    }
+
+    function drawBoard() {
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const isDark = (row + col) % 2 === 1;
+          mainCtx.fillStyle = isDark ? colors.boardDark : colors.boardLight;
+          mainCtx.fillRect(col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE);
+        }
+      }
+      if (board) {
+        drawPieces();
+      }
+      drawHighlights();
+    }
+
+    function drawPieces() {
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const piece = board[row][col];
+          if (piece) {
+            const x = col * SQUARE_SIZE + SQUARE_SIZE / 2;
+            const y = row * SQUARE_SIZE + SQUARE_SIZE / 2;
+            const radius = SQUARE_SIZE / 2 - 10;
+            
+            mainCtx.fillStyle = piece.color === 'red' ? colors.redPiece : colors.blackPiece;
+            mainCtx.beginPath();
+            mainCtx.arc(x, y, radius, 0, Math.PI * 2);
+            mainCtx.fill();
+
+            if (piece.is_king) {
+              mainCtx.fillStyle = colors.king;
+              mainCtx.beginPath();
+              mainCtx.arc(x, y, radius / 2, 0, Math.PI * 2);
+              mainCtx.fill();
+            }
+          }
+        }
+      }
+    }
+
+    function drawHighlights() {
+        if (selectedPiece) {
+            const { row, col } = selectedPiece;
+            mainCtx.fillStyle = colors.selected;
+            mainCtx.fillRect(col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE);
+        }
+        mainCtx.fillStyle = colors.validMove;
+        validMoves.forEach(move => {
+            mainCtx.fillRect(move.col * SQUARE_SIZE, move.row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE);
+        });
+    }
+
+    function getClickedSquare(event) {
+        const rect = mainCanvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        const row = Math.floor(y / SQUARE_SIZE);
+        const col = Math.floor(x / SQUARE_SIZE);
+        return { row, col };
+    }
+
+    function onBoardClick(event) {
+        if (winner || currentTurn !== 'red') return;
+
+        const { row, col } = getClickedSquare(event);
+        
+        const clickedValidMove = validMoves.find(move => move.row === row && move.col === col);
+
+        if (clickedValidMove) {
+            playMove([selectedPiece.row, selectedPiece.col], [row, col]);
+            selectedPiece = null;
+            validMoves = [];
+        } else {
+            const piece = board[row] ? board[row][col] : null;
+            if (piece && piece.color === currentTurn) {
+                selectedPiece = { row, col, piece };
+                // This is a simplification. The backend will have the true valid moves.
+                // For the UI, we'll just highlight some potential moves.
+                // A better implementation would fetch valid moves from the backend.
+                getValidMoves(row, col);
+            } else {
+                selectedPiece = null;
+                validMoves = [];
+            }
+        }
+        drawBoard();
+    }
+    
+    // This is a temporary client-side estimation of moves for UI feedback.
+    // The server remains the source of truth.
+    function getValidMoves(row, col) {
+        validMoves = [];
+        const piece = board[row][col];
+        if (!piece) return;
+
+        const dir = piece.color === 'red' ? -1 : 1;
+        const opponent = piece.color === 'red' ? 'black' : 'red';
+
+        const checkMove = (r, c) => {
+            if (r >= 0 && r < 8 && c >= 0 && c < 8 && !board[r][c]) {
+                validMoves.push({row: r, col: c});
+            }
+        };
+
+        const checkCapture = (r, c, jumpR, jumpC) => {
+            if (jumpR >= 0 && jumpR < 8 && jumpC >= 0 && jumpC < 8 &&
+                board[r][c] && board[r][c].color === opponent && !board[jumpR][jumpC]) {
+                validMoves.push({row: jumpR, col: jumpC});
+            }
+        };
+
+        // Regular moves
+        checkMove(row + dir, col - 1);
+        checkMove(row + dir, col + 1);
+        if (piece.is_king) {
+            checkMove(row - dir, col - 1);
+            checkMove(row - dir, col + 1);
+        }
+
+        // Captures
+        checkCapture(row + dir, col - 1, row + 2 * dir, col - 2);
+        checkCapture(row + dir, col + 1, row + 2 * dir, col + 2);
+        if (piece.is_king) {
+            checkCapture(row - dir, col - 1, row - 2 * dir, col - 2);
+            checkCapture(row - dir, col + 1, row - 2 * dir, col + 2);
+        }
+    }
+
+
+    // --- Tree Viewer Logic ---
+    let treePositions = new Map();
+    const treeViewport = { scale: 0.5, offsetX: 0, offsetY: 0 };
+
+    function showTree() {
+        if (!lastTree) return;
+        treeContainer.style.display = "flex";
+        treeCanvas.width = window.innerWidth * 0.9;
+        treeCanvas.height = window.innerHeight * 0.9;
+        treePositions = layoutTree(lastTree);
+        fitTreeView();
+        drawTree();
+    }
 
     function layoutTree(tree) {
       const children = new Map();
@@ -222,10 +393,10 @@
       return pos;
     }
 
-    function fitView() {
-      if (!positions.size) return;
-      const xs = [...positions.values()].map(p => p.x);
-      const ys = [...positions.values()].map(p => p.y);
+    function fitTreeView() {
+      if (!treePositions.size) return;
+      const xs = [...treePositions.values()].map(p => p.x);
+      const ys = [...treePositions.values()].map(p => p.y);
       const minX = Math.min(...xs);
       const maxX = Math.max(...xs);
       const minY = Math.min(...ys);
@@ -233,281 +404,56 @@
       const spanX = maxX - minX || 1;
       const spanY = maxY - minY || 1;
       const pad = 40;
-      const scaleX = (canvas.width - pad * 2) / spanX;
-      const scaleY = (canvas.height - pad * 2) / spanY;
-      viewport.scale = Math.min(scaleX, scaleY) * 0.9;
+      const scaleX = (treeCanvas.width - pad * 2) / spanX;
+      const scaleY = (treeCanvas.height - pad * 2) / spanY;
+      treeViewport.scale = Math.min(scaleX, scaleY) * 0.9;
       const centerX = (minX + maxX) / 2;
       const centerY = (minY + maxY) / 2;
-      viewport.offsetX = canvas.width / 2 - centerX * viewport.scale;
-      viewport.offsetY = canvas.height / 3 - centerY * viewport.scale;
+      treeViewport.offsetX = treeCanvas.width / 2 - centerX * treeViewport.scale;
+      treeViewport.offsetY = treeCanvas.height / 3 - centerY * treeViewport.scale;
     }
 
-    function clearScene() {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = colors.bg;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    function drawTree() {
+        treeCtx.fillStyle = '#0d0f15';
+        treeCtx.fillRect(0, 0, treeCanvas.width, treeCanvas.height);
+        if (!lastTree) return;
 
-    function draw() {
-      clearScene();
-      if (!tree) return;
+        treeCtx.save();
+        treeCtx.translate(treeViewport.offsetX, treeViewport.offsetY);
+        treeCtx.scale(treeViewport.scale, treeViewport.scale);
 
-      ctx.save();
-      ctx.translate(viewport.offsetX, viewport.offsetY);
-      ctx.scale(viewport.scale, viewport.scale);
+        treeCtx.lineWidth = 2 / treeViewport.scale;
+        treeCtx.lineCap = "round";
 
-      const visited = new Set();
-      const current = frames[frameIndex] || null;
-      for (let i = 0; i <= frameIndex; i++) {
-        const f = frames[i];
-        if (f && f.edge && f.edge[0] != null && f.edge[1] != null) {
-          visited.add(`${f.edge[0]}-${f.edge[1]}`);
+        for (const e of lastTree.edges) {
+            const from = treePositions.get(e.from);
+            const to = treePositions.get(e.to);
+            if (!from || !to) continue;
+            
+            treeCtx.strokeStyle = e.is_pruned ? '#2f3542' : '#5a6475';
+            treeCtx.beginPath();
+            treeCtx.moveTo(from.x, from.y);
+            treeCtx.lineTo(to.x, to.y);
+            treeCtx.stroke();
         }
-      }
-
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.lineCap = "round";
-
-      for (const e of tree.edges) {
-        const from = positions.get(e.from);
-        const to = positions.get(e.to);
-        if (!from || !to) continue;
-        const key = `${e.from}-${e.to}`;
-        const isCurrent = current && current.edge && key === `${current.edge[0]}-${current.edge[1]}`;
-        const isVisited = visited.has(key);
-        let color = colors.unvisited;
-        if (e.is_pruned) color = colors.pruned;
-        else if (isCurrent) color = colors.current;
-        else if (isVisited) color = colors.visited;
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(to.x, to.y);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-      drawBoardOverlay();
-      updateHud();
+        treeCtx.restore();
     }
 
-    function drawBoardOverlay() {
-      if (!boardVisible || !metaInfo || !metaInfo.board) return;
-      const size = 170;
-      const cell = size / 8;
-      const margin = 16;
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      const x = margin;
-      const y = canvas.height - size - margin;
-      ctx.translate(x, y);
-      ctx.fillStyle = "rgba(10,12,18,0.78)";
-      ctx.fillRect(-6, -6, size + 12, size + 12);
 
-      for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-          const isDark = (r + c) % 2 === 1;
-          ctx.fillStyle = isDark ? colors.boardDark : colors.boardLight;
-          ctx.fillRect(c * cell, r * cell, cell, cell);
-          const piece = metaInfo.board[r][c];
-          if (piece) {
-            ctx.beginPath();
-            ctx.fillStyle = piece.color === "red" ? colors.redPiece : colors.blackPiece;
-            ctx.arc(c * cell + cell / 2, r * cell + cell / 2, cell * 0.35, 0, Math.PI * 2);
-            ctx.fill();
-            if (piece.king) {
-              ctx.fillStyle = colors.king;
-              ctx.beginPath();
-              ctx.arc(c * cell + cell / 2, r * cell + cell / 2, cell * 0.2, 0, Math.PI * 2);
-              ctx.fill();
-            }
-          }
+    // Event Listeners
+    document.getElementById("newGame").addEventListener("click", newGame);
+    document.getElementById("showTree").addEventListener("click", showTree);
+    mainCanvas.addEventListener("click", onBoardClick);
+    treeContainer.addEventListener("click", (e) => {
+        if (e.target === treeContainer) {
+            treeContainer.style.display = "none";
         }
-      }
-      ctx.restore();
-    }
-
-    function updateHud(meta) {
-      const frameInfo = document.getElementById("frameInfo");
-      frameInfo.textContent = `Frame ${frames.length ? Math.min(frameIndex + 1, frames.length) : 0} / ${frames.length}`;
-      if (meta) {
-        document.getElementById("meta").textContent = `${meta.algorithm || "Algorithm"} | depth ${meta.depth ?? "?"} | nodes ${nodes.length}`;
-        metaInfo = meta;
-      }
-      const status = document.getElementById("status");
-      const current = frames[frameIndex] || null;
-      if (current && current.edge) {
-        const child = nodes.find(n => n.id === current.edge[1]);
-        const move = child?.move_notation;
-        const moveText = move ? `${move.from} → ${move.to}` : "Root";
-        const scoreText = current.node_score == null ? "pending" : `${current.node_score}`;
-        status.textContent = `Branch being searched: ${moveText} | Evaluation: ${scoreText}`;
-      } else {
-        status.textContent = "Ready. Pan/zoom to explore the tree.";
-      }
-      updateTopMoves();
-    }
-
-    async function loadTree() {
-      const metaEl = document.getElementById("meta");
-      metaEl.textContent = "Loading tree.json…";
-      try {
-        const res = await fetch(`tree.json?ts=${Date.now()}`);
-        if (!res.ok) throw new Error("tree.json not found");
-        const data = await res.json();
-        tree = data;
-        nodes = data.nodes || [];
-        nodeById.clear();
-        nodes.forEach(n => nodeById.set(n.id, n));
-        frames = data.frames || [];
-        positions = layoutTree(data);
-        fitView();
-        frameIndex = 0;
-        metaEl.textContent = `${data.meta?.algorithm || "Algorithm"} | depth ${data.meta?.depth ?? "?"} | nodes ${nodes.length}`;
-        metaInfo = data.meta || null;
-        draw();
-      } catch (err) {
-        metaEl.textContent = "tree.json not found. Run the Python app and make a bot move to export.";
-        console.error(err);
-      }
-    }
-
-    // Controls
-    document.getElementById("refresh").onclick = loadTree;
-    document.getElementById("play").onclick = () => { playing = true; };
-    document.getElementById("pause").onclick = () => { playing = false; };
-    document.getElementById("zoomIn").onclick = () => {
-      viewport.scale *= 1.35;
-      draw();
-    };
-    document.getElementById("zoomOut").onclick = () => {
-      viewport.scale /= 1.35;
-      draw();
-    };
-    document.getElementById("speedUp").onclick = () => {
-      frameDelay = Math.max(10, frameDelay * 0.7);
-    };
-    document.getElementById("speedDown").onclick = () => {
-      frameDelay = frameDelay * 1.4;
-    };
-    document.getElementById("toggleBoard").onclick = (e) => {
-      boardVisible = !boardVisible;
-      e.target.textContent = boardVisible ? "Hide Board" : "Show Board";
-      draw();
-    };
-    document.getElementById("stepFwd").onclick = () => {
-      playing = false;
-      frameIndex = Math.min(frames.length - 1, frameIndex + 1);
-      draw();
-    };
-    document.getElementById("stepBack").onclick = () => {
-      playing = false;
-      frameIndex = Math.max(0, frameIndex - 1);
-      draw();
-    };
-
-    // Interaction: pan/zoom
-    canvas.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      const { offsetX, offsetY, deltaY } = e;
-      const zoom = Math.exp(-deltaY * 0.001);
-      const wx = (offsetX - viewport.offsetX) / viewport.scale;
-      const wy = (offsetY - viewport.offsetY) / viewport.scale;
-      viewport.scale *= zoom;
-      viewport.offsetX = offsetX - wx * viewport.scale;
-      viewport.offsetY = offsetY - wy * viewport.scale;
-      draw();
-    }, { passive: false });
-
-    canvas.addEventListener("pointerdown", (e) => {
-      viewport.dragging = true;
-      viewport.dragStart = { x: e.clientX, y: e.clientY };
-      viewport.startOffset = { x: viewport.offsetX, y: viewport.offsetY };
-      canvas.setPointerCapture(e.pointerId);
-    });
-    canvas.addEventListener("pointermove", (e) => {
-      if (!viewport.dragging) return;
-      const dx = e.clientX - viewport.dragStart.x;
-      const dy = e.clientY - viewport.dragStart.y;
-      viewport.offsetX = viewport.startOffset.x + dx;
-      viewport.offsetY = viewport.startOffset.y + dy;
-      draw();
-    });
-    canvas.addEventListener("pointerup", (e) => {
-      viewport.dragging = false;
-      canvas.releasePointerCapture(e.pointerId);
-    });
-    canvas.addEventListener("pointerleave", () => {
-      viewport.dragging = false;
     });
 
-    function updateTopMoves() {
-      if (!nodes.length) return;
-      const list = document.getElementById("moveList");
-      // Root children = edges directly from root id 0
-      const rootChildrenIds = tree.edges.filter(e => e.from === 0).map(e => e.to);
-      const rootChildren = rootChildrenIds.map(id => nodeById.get(id)).filter(Boolean);
-      if (!rootChildren.length) {
-        list.innerHTML = "<li>No moves found</li>";
-        return;
-      }
-      // Parent map to find the root-child ancestor for any node
-      const parentOf = new Map();
-      for (const e of tree.edges) parentOf.set(e.to, e.from);
-      function findRootChild(nodeId) {
-        let cur = nodeId;
-        while (cur != null && cur !== 0) {
-          const p = parentOf.get(cur);
-          if (p === 0) return cur;
-          cur = p;
-        }
-        return null;
-      }
 
-      // Track best score per root child (max seen), seeded with node.score
-      const bestScores = new Map();
-      for (const n of rootChildren) bestScores.set(n.id, n.score);
-      for (let i = 0; i <= frameIndex; i++) {
-        const f = frames[i];
-        if (f && f.edge && f.node_score != null) {
-          const rc = findRootChild(f.edge[1]);
-          if (rc != null && bestScores.has(rc)) {
-            const prev = bestScores.get(rc);
-            bestScores.set(rc, prev == null ? f.node_score : Math.max(prev, f.node_score));
-          }
-        }
-      }
-      const sorted = rootChildren
-        .map(n => ({ n, score: bestScores.get(n.id) }))
-        .sort((a, b) => {
-          if (a.score == null && b.score == null) return 0;
-          if (a.score == null) return 1;
-          if (b.score == null) return -1;
-          return b.score - a.score;
-        })
-        .slice(0, 5);
+    // Initial setup
+    drawBoard();
 
-      list.innerHTML = "";
-      for (const { n, score } of sorted) {
-        const li = document.createElement("li");
-        const mv = n.move_notation;
-        const textMove = mv ? `${mv.from} → ${mv.to}` : "Root";
-        li.textContent = `${textMove} — ${score == null ? "pending" : score}`;
-        list.appendChild(li);
-      }
-    }
-
-    function tick(now) {
-      if (playing && frames.length && now - lastTick > frameDelay) {
-        lastTick = now;
-        frameIndex = Math.min(frames.length - 1, frameIndex + 1);
-        draw();
-      }
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-
-    loadTree();
   </script>
 </body>
 </html>
