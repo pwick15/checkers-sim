@@ -119,6 +119,76 @@ class MinimaxBot(BotPlayer):
 
         self.last_decision_tree = None
 
+    def extract_simulation_paths(self, num_branches=2):
+        """
+        Extract the first N branch simulations from the decision tree.
+
+        Returns a list of simulation paths, where each path contains:
+        - branch_index: Index of this branch (0-based)
+        - moves: List of moves in the optimal path through this branch
+        - final_score: The evaluated score for this branch
+
+        Args:
+            num_branches (int): Number of top-level branches to extract
+
+        Returns:
+            list: List of simulation path dictionaries
+        """
+        if not self.last_decision_tree or not self.last_decision_tree.children:
+            return []
+
+        paths = []
+        opponent_color = 'black' if self.color == 'red' else 'red'
+
+        # Get top N branches sorted by score (best first)
+        branches = sorted(self.last_decision_tree.children,
+                         key=lambda n: n.score if n.score is not None else float('-inf'),
+                         reverse=True)[:num_branches]
+
+        for idx, branch in enumerate(branches):
+            moves = []
+            current_node = branch
+            is_maximizing = False  # First move after root is opponent's response
+
+            # Trace down the optimal path
+            while current_node:
+                if current_node.move:
+                    # Determine whose move this is based on depth
+                    # Depth 1 = AI move, Depth 2 = Opponent move, etc.
+                    player = self.color if current_node.depth % 2 == 1 else opponent_color
+
+                    moves.append({
+                        "from": current_node.move[0],
+                        "to": current_node.move[1],
+                        "player": player,
+                        "depth": current_node.depth
+                    })
+
+                # Find best child to continue path
+                if not current_node.children:
+                    break
+
+                # Alternate between max and min
+                if is_maximizing:
+                    # AI's turn: pick highest score
+                    next_node = max(current_node.children,
+                                   key=lambda n: n.score if n.score is not None else float('-inf'))
+                else:
+                    # Opponent's turn: pick lowest score
+                    next_node = min(current_node.children,
+                                   key=lambda n: n.score if n.score is not None else float('inf'))
+
+                is_maximizing = not is_maximizing
+                current_node = next_node
+
+            paths.append({
+                "branch_index": idx,
+                "moves": moves,
+                "final_score": branch.score
+            })
+
+        return paths
+
     def get_move(self, game):
         """Get the best move using minimax algorithm."""
         self.nodes_explored = 0

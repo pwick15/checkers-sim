@@ -244,6 +244,16 @@
             animationFrames = data.tree ? data.tree.frames : [];
             frameIndex = 0;
             isPlaying = true;
+
+            // Log simulation paths for testing
+            if (data.simulation_paths && data.simulation_paths.length > 0) {
+                console.log("Simulation paths received:", data.simulation_paths);
+                console.log(`Branch 1: ${data.simulation_paths[0].moves.length} moves, score: ${data.simulation_paths[0].final_score}`);
+                if (data.simulation_paths.length > 1) {
+                    console.log(`Branch 2: ${data.simulation_paths[1].moves.length} moves, score: ${data.simulation_paths[1].final_score}`);
+                }
+            }
+
             await updateGameState();
             const algoName = data.algorithm === 'minimax' ? 'Minimax' : 'Alpha-Beta';
             const nodesText = data.nodes_explored ? ` (explored ${data.nodes_explored} positions)` : '';

@@ -133,6 +133,7 @@ async def get_bot_move(game_id: str):
     move = bot.get_move(game)
 
     tree_data = None
+    simulation_paths = []
     if hasattr(bot, 'last_decision_tree') and bot.last_decision_tree:
         # We need to serialize the tree. Let's borrow the logic from the GUI for now.
         # This is a temporary solution.
@@ -140,6 +141,19 @@ async def get_bot_move(game_id: str):
         gui_instance.game = game
         gui_instance.bot = bot
         tree_data = gui_instance._serialize_tree(bot.last_decision_tree)
+
+        # Extract simulation paths for animation
+        if hasattr(bot, 'extract_simulation_paths'):
+            simulation_paths = bot.extract_simulation_paths(num_branches=2)
+            # Add notation to each move for display
+            for path in simulation_paths:
+                for move_data in path['moves']:
+                    from_pos = move_data['from']
+                    to_pos = move_data['to']
+                    move_data['notation'] = {
+                        'from': pos_to_notation(from_pos[0], from_pos[1]),
+                        'to': pos_to_notation(to_pos[0], to_pos[1])
+                    }
 
     if move:
         game.play_move(move[0], move[1])
@@ -151,9 +165,21 @@ async def get_bot_move(game_id: str):
         "winner": game.winner,
         "board": serialize_board(game.board),
         "tree": tree_data,
+        "simulation_paths": simulation_paths,
         "algorithm": algorithm,
         "nodes_explored": getattr(bot, 'nodes_explored', 0)
     }
+
+
+def pos_to_notation(row, col):
+    """Convert (row, col) to checkers notation (1-32)."""
+    # Only dark squares are numbered
+    if (row + col) % 2 == 0:  # Light square
+        return None
+
+    # Count dark squares from top-left
+    square_num = (row * 4) + (col // 2) + 1
+    return square_num
 
 
 def serialize_board(board):
