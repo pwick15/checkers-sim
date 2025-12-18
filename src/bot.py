@@ -210,38 +210,36 @@ class MinimaxBot(BotPlayer):
         if not self.last_decision_tree:
             return {'nodes': [], 'total': 0}
 
-        # Get top-level branches sorted by score to determine their rank
+        # Get top-level branches and sort them by score
         top_branches = sorted(self.last_decision_tree.children,
                             key=lambda n: n.score if n.score is not None else float('-inf'),
                             reverse=True)
         
-        # Create a map from branch node ID to its rank (index)
-        branch_rank_map = {id(branch): i for i, branch in enumerate(top_branches)}
+        # Add rank directly to each branch node object
+        for i, branch in enumerate(top_branches):
+            branch.rank = i
 
         all_nodes_with_info = []
-        
-        def collect_all_nodes(node, branch_id):
-            # Only include nodes that were actually visited during the search
+        def collect_all_nodes(node, branch_root):
             if node.visit_order is not None:
-                all_nodes_with_info.append({'node': node, 'branch_id': branch_id})
-            
+                all_nodes_with_info.append({'node': node, 'branch_root': branch_root})
             for child in node.children:
-                collect_all_nodes(child, branch_id)
+                collect_all_nodes(child, branch_root)
 
-        # Collect all nodes from all branches that were actually explored
+        # self.last_decision_tree.children is the original unsorted list
         for branch in self.last_decision_tree.children:
             if branch.visit_order is not None:
-                collect_all_nodes(branch, id(branch))
+                collect_all_nodes(branch, branch) # Pass the branch root itself
 
-        # Sort nodes by the order they were visited during the search
         all_nodes_with_info.sort(key=lambda x: x['node'].visit_order)
 
-        # Format for frontend
         frontend_nodes = []
         for item in all_nodes_with_info:
             node = item['node']
-            branch_id = item['branch_id']
-            branch_index = branch_rank_map.get(branch_id, -1)
+            branch_root = item['branch_root']
+            
+            # The rank is now an attribute of the branch root object
+            branch_index = getattr(branch_root, 'rank', -1)
             
             is_top_5_branch = branch_index < 5 and branch_index != -1
 
@@ -252,6 +250,11 @@ class MinimaxBot(BotPlayer):
                 'score': node.score,
                 'is_pruned': node.is_pruned
             })
+        
+        # Clean up the rank attribute
+        for branch in self.last_decision_tree.children:
+            if hasattr(branch, 'rank'):
+                del branch.rank
 
         print(f"Returning {len(frontend_nodes)} nodes in exploration order")
 

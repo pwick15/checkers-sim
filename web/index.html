@@ -380,7 +380,8 @@
       dotSize: 0,
       padding: 10,
       nodePositions: [],
-      hoveredNode: null
+      hoveredNode: null,
+      top5Nodes: new Set() // NEW: Track nodes that are part of top 5 paths
     };
 
     const colors = {
@@ -573,13 +574,18 @@
 
     function drawGrid() {
       gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
-      const { exploredNodes, dotSize, nodePositions } = gridState;
+      const { exploredNodes, dotSize, nodePositions, top5Nodes } = gridState;
 
       nodePositions.forEach((pos, index) => {
         const { x, y, nodeData } = pos;
         let fillColor;
         if (index < exploredNodes) {
-          fillColor = nodeData.is_top_5_branch ? '#4caf50' : '#fbc02d'; // Green for top 5 branches, yellow for others
+          // Use the new top5Nodes set to determine color
+          if (top5Nodes.has(index)) {
+            fillColor = '#4caf50'; // Green for nodes animated on board
+          } else {
+            fillColor = '#fbc02d'; // Yellow for other explored nodes
+          }
         } else if (index === exploredNodes && animationState.isAnimating) {
           fillColor = '#f9a825'; // Brighter yellow for current
         } else {
@@ -599,6 +605,8 @@
         simulationPaths.sort((a, b) => a.branch_index - b.branch_index);
 
         initializeGrid(allNodes.length);
+        
+        gridState.top5Nodes.clear(); // Clear the set for the new simulation
 
         animationState = {
             ...animationState,
@@ -635,7 +643,8 @@
             
             document.getElementById("branch-info").textContent = `Exploring Branch ${animationState.currentBranchIndex + 1} / ${simulationPaths.length}`;
 
-            if (currentNode.is_top_5_branch && branchData) {
+            // USE THE OLD is_top_5 KEY FROM THE LOG DATA
+            if (currentNode.is_top_5 && branchData) {
                 animationState.phase = 'animating';
                 animationState.currentMove = 0;
                 animationState.simulationBoard = copyBoard(animationState.realBoard);
@@ -662,6 +671,8 @@
                         drawBoard();
                         
                         if(animationState.currentNodeIndex < allNodes.length) {
+                            // Add this node to the set of top 5 nodes to be colored green
+                            gridState.top5Nodes.add(animationState.currentNodeIndex);
                             gridState.exploredNodes = ++animationState.currentNodeIndex;
                             drawGrid();
                         }
