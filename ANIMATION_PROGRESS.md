@@ -126,7 +126,33 @@ Implemented complete simulation animation system:
 **Files Modified:**
 - `web/index.html`: Complete animation system with ~200 lines of new code
 
-### 🎨 Phase 7: Polish and Future Enhancements (TODO)
+### ✅ Phase 7: Landing Page + UI Cleanup (Committed)
+Complete redesign for cleaner, more focused experience:
+
+**Landing Page:**
+- Separate page for algorithm selection before game starts
+- Two algorithm cards: Minimax and Alpha-Beta Pruning
+- Descriptions visible on landing page
+- "Start Game" button to begin
+- Click selection with visual feedback
+
+**Main Game Page Cleanup:**
+- Removed "Checkers AI Simulator" header
+- "New Game" button (with back arrow) at top left - returns to landing
+- Algorithm indicator badge moved to top right (subtle, unobtrusive)
+- Shows current algorithm + description
+- Removed algorithm dropdown from game page
+- Ready for exploration grid visualization
+
+**Page Navigation:**
+- `showPage()` function switches between landing/game
+- `goToLanding()` resets game state and returns to start
+- `startNewGame()` transitions from landing to game with selected algorithm
+
+**Files Modified:**
+- `web/index.html`: Complete page structure overhaul, new CSS for landing page
+
+### 🔲 Phase 8: Exploration Grid Visualization (TODO)
 - Speed control slider
 - Skip animation button
 - Pause/resume during simulation
