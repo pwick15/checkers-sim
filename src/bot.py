@@ -119,9 +119,9 @@ class MinimaxBot(BotPlayer):
 
         self.last_decision_tree = None
 
-    def extract_simulation_paths(self, num_branches=2):
+    def extract_simulation_paths(self, num_branches=None):
         """
-        Extract the first N branch simulations from the decision tree.
+        Extract branch simulations from the decision tree.
 
         Returns a list of simulation paths, where each path contains:
         - branch_index: Index of this branch (0-based)
@@ -129,7 +129,7 @@ class MinimaxBot(BotPlayer):
         - final_score: The evaluated score for this branch
 
         Args:
-            num_branches (int): Number of top-level branches to extract
+            num_branches (int): Number of top-level branches to extract (None = all branches)
 
         Returns:
             list: List of simulation path dictionaries
@@ -140,10 +140,14 @@ class MinimaxBot(BotPlayer):
         paths = []
         opponent_color = 'black' if self.color == 'red' else 'red'
 
-        # Get top N branches sorted by score (best first)
+        # Get all branches sorted by score (best first)
         branches = sorted(self.last_decision_tree.children,
                          key=lambda n: n.score if n.score is not None else float('-inf'),
-                         reverse=True)[:num_branches]
+                         reverse=True)
+
+        # Limit to num_branches if specified
+        if num_branches is not None:
+            branches = branches[:num_branches]
 
         for idx, branch in enumerate(branches):
             moves = []

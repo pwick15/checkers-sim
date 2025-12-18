@@ -142,9 +142,9 @@ async def get_bot_move(game_id: str):
         gui_instance.bot = bot
         tree_data = gui_instance._serialize_tree(bot.last_decision_tree)
 
-        # Extract simulation paths for animation
+        # Extract simulation paths for animation (all branches)
         if hasattr(bot, 'extract_simulation_paths'):
-            simulation_paths = bot.extract_simulation_paths(num_branches=2)
+            simulation_paths = bot.extract_simulation_paths()  # Get all branches
             # Add notation to each move for display
             for path in simulation_paths:
                 for move_data in path['moves']:

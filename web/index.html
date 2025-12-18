@@ -222,6 +222,43 @@
       display: block;
       margin: 0 auto;
     }
+    .speed-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 15px;
+      padding: 10px;
+      background: rgba(13, 15, 21, 0.5);
+      border-radius: 8px;
+    }
+    .speed-control label {
+      font-size: 12px;
+      color: #b8c5d6;
+      white-space: nowrap;
+    }
+    .speed-control input[type="range"] {
+      flex: 1;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      outline: none;
+    }
+    .speed-control input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #fbc02d;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .speed-control input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #fbc02d;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
     #score-display {
       font-size: 24px;
       font-weight: 700;
@@ -284,7 +321,12 @@
       <!-- Exploration Grid Panel -->
       <div class="panel">
         <div id="branch-info"></div>
-        <canvas id="grid-canvas" width="460" height="360"></canvas>
+        <canvas id="grid-canvas" width="460" height="300"></canvas>
+        <div class="speed-control">
+          <label>Speed:</label>
+          <input type="range" id="speed-slider" min="0.5" max="3" step="0.5" value="1">
+          <span id="speed-label">1x</span>
+        </div>
         <div id="score-display"></div>
       </div>
     </div>
@@ -323,7 +365,17 @@
       realBoard: null,
       lastUpdateTime: 0,
       moveDelay: 800, // ms between moves
-      scoreDelay: 1500 // ms to show score
+      scoreDelay: 1500, // ms to show score
+      speed: 1.0 // speed multiplier (0.5 = slower, 2 = faster)
+    };
+
+    // Grid visualization state
+    let gridState = {
+      totalBranches: 0,
+      exploredBranches: 0,
+      gridSize: 0,
+      dotSize: 0,
+      padding: 10
     };
 
     const colors = {
@@ -501,6 +553,58 @@
       }
     }
 
+    function initializeGrid(totalBranches) {
+      gridState.totalBranches = totalBranches;
+      gridState.exploredBranches = 0;
+
+      // Calculate grid size (square root, rounded up)
+      gridState.gridSize = Math.ceil(Math.sqrt(totalBranches));
+
+      // Calculate dot size based on canvas size
+      const availableSize = Math.min(gridCanvas.width, gridCanvas.height) - (gridState.padding * 2);
+      gridState.dotSize = Math.floor(availableSize / gridState.gridSize) - 2;
+
+      drawGrid();
+    }
+
+    function drawGrid() {
+      gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+
+      const { gridSize, dotSize, padding, totalBranches, exploredBranches } = gridState;
+      const spacing = dotSize + 2;
+
+      // Center the grid
+      const totalWidth = gridSize * spacing;
+      const totalHeight = gridSize * spacing;
+      const offsetX = (gridCanvas.width - totalWidth) / 2 + dotSize / 2;
+      const offsetY = (gridCanvas.height - totalHeight) / 2 + dotSize / 2;
+
+      let dotIndex = 0;
+      for (let row = 0; row < gridSize; row++) {
+        for (let col = 0; col < gridSize; col++) {
+          if (dotIndex >= totalBranches) break;
+
+          const x = offsetX + col * spacing;
+          const y = offsetY + row * spacing;
+
+          // Color based on exploration status
+          if (dotIndex < exploredBranches) {
+            gridCtx.fillStyle = '#fbc02d'; // Yellow for explored
+          } else if (dotIndex === exploredBranches) {
+            gridCtx.fillStyle = '#f9a825'; // Brighter yellow for current
+          } else {
+            gridCtx.fillStyle = 'rgba(255, 255, 255, 0.15)'; // Gray for unexplored
+          }
+
+          gridCtx.beginPath();
+          gridCtx.arc(x, y, dotSize / 2, 0, Math.PI * 2);
+          gridCtx.fill();
+
+          dotIndex++;
+        }
+      }
+    }
+
     function updateMoveTracker() {
       if (!animationState.isAnimating || simulationPaths.length === 0) {
         document.getElementById("branch-info").textContent = "";
@@ -513,13 +617,16 @@
       const totalBranches = simulationPaths.length;
 
       // Update branch info
-      const currentMove = currentPath.moves[animationState.currentMove];
-      let statusText = `Simulating Branch ${branchNum} of ${totalBranches}`;
+      let statusText = `Exploring ${totalBranches} possible moves (Branch ${branchNum})`;
 
-      if (currentMove && animationState.phase === 'animating') {
-        const playerLabel = currentMove.player === 'black' ? 'AI' : 'You';
-        const notation = currentMove.notation;
-        statusText += ` - ${playerLabel}: ${notation.from} → ${notation.to}`;
+      if (animationState.currentBranch < 3) {
+        // Show detailed info for first 3 branches
+        const currentMove = currentPath.moves[animationState.currentMove];
+        if (currentMove && animationState.phase === 'animating') {
+          const playerLabel = currentMove.player === 'black' ? 'AI' : 'You';
+          const notation = currentMove.notation;
+          statusText += ` - ${playerLabel}: ${notation.from} → ${notation.to}`;
+        }
       }
 
       document.getElementById("branch-info").textContent = statusText;
@@ -532,10 +639,17 @@
       } else {
         scoreEl.classList.remove("visible");
       }
+
+      // Update grid
+      gridState.exploredBranches = branchNum;
+      drawGrid();
     }
 
     function startSimulationAnimation() {
       if (simulationPaths.length === 0) return;
+
+      // Initialize grid
+      initializeGrid(simulationPaths.length);
 
       // Initialize animation state
       animationState.isAnimating = true;
@@ -546,7 +660,7 @@
       animationState.simulationBoard = copyBoard(board);
       animationState.lastUpdateTime = performance.now();
 
-      document.getElementById("status").textContent = "AI is simulating possible moves...";
+      document.getElementById("status").textContent = "AI is exploring all possible moves...";
       updateMoveTracker();
       drawBoard();
 
@@ -558,21 +672,26 @@
       if (!animationState.isAnimating) return;
 
       const elapsed = timestamp - animationState.lastUpdateTime;
+      const showDetailedAnimation = animationState.currentBranch < 3; // Only first 3 branches
 
       if (animationState.phase === 'animating') {
+        const moveDelay = showDetailedAnimation ? (animationState.moveDelay / animationState.speed) : 50; // Fast for branches 4+
+
         // Animate current move
-        if (elapsed >= animationState.moveDelay) {
+        if (elapsed >= moveDelay) {
           const currentPath = simulationPaths[animationState.currentBranch];
           const currentMove = currentPath.moves[animationState.currentMove];
 
-          // Apply move to simulation board
-          applyMoveToBoard(animationState.simulationBoard, currentMove.from, currentMove.to);
-          drawBoard();
+          if (showDetailedAnimation) {
+            // Apply move to simulation board and show on screen
+            applyMoveToBoard(animationState.simulationBoard, currentMove.from, currentMove.to);
+            drawBoard();
+          }
 
           // Move to next move or finish branch
           animationState.currentMove++;
           if (animationState.currentMove >= currentPath.moves.length) {
-            // All moves done, show score
+            // All moves done, show score (only for detailed branches)
             animationState.phase = 'scoring';
           }
 
@@ -580,8 +699,10 @@
           updateMoveTracker();
         }
       } else if (animationState.phase === 'scoring') {
+        const scoreDelay = showDetailedAnimation ? (animationState.scoreDelay / animationState.speed) : 100;
+
         // Show score for a moment
-        if (elapsed >= animationState.scoreDelay) {
+        if (elapsed >= scoreDelay) {
           // Move to next branch or finish
           animationState.currentBranch++;
           if (animationState.currentBranch >= simulationPaths.length) {
@@ -592,7 +713,10 @@
             // Reset for next branch
             animationState.currentMove = 0;
             animationState.phase = 'animating';
-            animationState.simulationBoard = copyBoard(animationState.realBoard);
+            if (animationState.currentBranch < 3) {
+              // Reset simulation board for detailed animation
+              animationState.simulationBoard = copyBoard(animationState.realBoard);
+            }
             animationState.lastUpdateTime = timestamp;
             updateMoveTracker();
             drawBoard();
@@ -751,6 +875,12 @@
 
     // Game page
     document.getElementById("newGame").addEventListener("click", goToLanding);
+
+    // Speed control
+    document.getElementById("speed-slider").addEventListener("input", (e) => {
+      animationState.speed = parseFloat(e.target.value);
+      document.getElementById("speed-label").textContent = `${animationState.speed}x`;
+    });
 
     boardCanvas.addEventListener("pointerdown", onBoardPointerDown);
     boardCanvas.addEventListener("pointermove", onBoardPointerMove);

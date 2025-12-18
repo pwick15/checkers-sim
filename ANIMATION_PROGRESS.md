@@ -152,11 +152,73 @@ Complete redesign for cleaner, more focused experience:
 **Files Modified:**
 - `web/index.html`: Complete page structure overhaul, new CSS for landing page
 
-### 🔲 Phase 8: Exploration Grid Visualization (TODO)
-- Speed control slider
-- Skip animation button
+### ✅ Phase 8: Exploration Grid + All Branches + Speed Control (Committed)
+Complete overhaul to visualize ALL branches explored by the AI:
+
+**Backend Changes:**
+- Modified `extract_simulation_paths()` to return all branches (not just 2)
+- Updated server to not limit branch count
+- All possible first moves now sent to frontend
+
+**Exploration Grid:**
+- Dynamic grid visualization based on total branch count
+- Grid size calculated as √(total branches) rounded up
+- Dots represent each branch:
+  - Gray: Unexplored
+  - Bright yellow: Currently exploring
+  - Yellow: Already explored
+- Grid fills progressively as AI explores branches
+- Synchronized with board animation
+
+**Smart Animation System:**
+- **First 3 branches**: Full detailed animation on board + grid
+  - Pieces move on board
+  - Each move shown sequentially
+  - Score displayed after each branch
+- **Remaining branches** (4+): Fast grid-only visualization
+  - No board animation (would take too long)
+  - Grid updates quickly (50ms per branch)
+  - Allows visualization of 10+ branches in seconds
+
+**Speed Control:**
+- Slider in UI (0.5x to 3x)
+- Adjusts both board animation and grid speed
+- Real-time speed changes during animation
+- 1x = default (800ms per move, 1500ms score display)
+
+**Key Implementation:**
+- `initializeGrid()` - Calculate grid layout based on branch count
+- `drawGrid()` - Render grid with current exploration status
+- `animationLoop()` - Modified to handle fast/slow branches differently
+- Speed multiplier applied to all delays
+
+**Files Modified:**
+- `src/bot.py`: Updated `extract_simulation_paths()` to return all branches
+- `src/server.py`: Removed `num_branches=2` limit
+- `web/index.html`: Complete grid system + speed control (~150 lines)
+
+### 🎯 Current Status
+
+The simulator now provides a complete educational experience:
+1. **Landing Page** - Choose algorithm with descriptions
+2. **Clean Game UI** - Minimal, focused interface
+3. **Full Visualization** - See ALL branches being explored
+4. **Smart Animation** - Detailed for first 3, fast for rest
+5. **Speed Control** - Adjust visualization speed in real-time
+
+The tool effectively demonstrates how checkers AI works by showing:
+- Every possible move the AI considers
+- How it simulates future game states
+- The evaluation scores it calculates
+- The difference between Minimax and Alpha-Beta Pruning
+
+### 🔮 Future Enhancements
 - Pause/resume during simulation
-- Color coding for different players
+- Skip to result button
+- Branch score visualization in grid (color intensity)
+- Minimax vs Alpha-Beta comparison mode
+- Depth selector (2-5)
+- Export simulation as video
 - Score explanation tooltip
 
 ## Data Structures
