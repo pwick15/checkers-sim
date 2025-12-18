@@ -96,39 +96,37 @@ Removed tree visualizer, created clean two-column layout:
 - `web/index.html`: Complete UI redesign, removed tree canvas and all visualization code
 - `ANIMATION_PROGRESS.md`: Created progress documentation file
 
-### 📋 Phase 5: Move Tracker Sidebar (TODO)
-Right side panel showing:
-- "Simulating Branch 1 of 2"
-- Move list with current move highlighted:
-  ```
-  1. AI: 23 → 19
-  2. You: 10 → 14  ← Currently simulating
-  3. AI: 19 → 15
-  ```
-- Final score when simulation completes
-- Progress indicator
+### ✅ Phase 5 & 6: Move Tracker + Animation System (Committed)
+Implemented complete simulation animation system:
 
-### 🎬 Phase 6: Board Simulation Animation (TODO)
-Core animation system:
-1. When bot needs to move, show "AI is thinking..."
-2. Start Branch 1 simulation:
-   - Make simulated pieces semi-transparent/different color
-   - Animate AI's first move
-   - Animate opponent's response
-   - Continue through depth levels
-   - Flash final score on screen
-   - Reset board
-3. Repeat for Branch 2
-4. Execute actual best move on real board
-5. Show "Bot has moved"
+**Move Tracker (Right Panel):**
+- Shows "Simulating Branch X of Y"
+- Lists all moves in current branch with notation (e.g., "1. AI: 23 → 19")
+- Highlights current move being animated (yellow background)
+- Displays final score at end of branch
+- Clears when simulation completes
 
-**Key Implementation Details:**
-- Maintain separate "real board state" vs "simulation board state"
-- Animation speed: ~300ms per move (adjustable)
-- Score display: ~1000ms pause
-- Total time for 2 branches at depth=3: ~10-15 seconds
+**Animation System:**
+- Animates first 2 branches from decision tree on the board
+- Maintains separate simulation board vs real board
+- Applies moves sequentially with 800ms delay between moves
+- Shows score for 1500ms after each branch completes
+- Resets simulation board between branches
+- Updates real game state after all simulations
+- Integrated with existing game flow
 
-### 🎨 Phase 7: Polish (TODO)
+**Key Implementation:**
+- `animationState` object tracks current branch/move/phase
+- `copyBoard()` creates deep copy for simulation
+- `applyMoveToBoard()` applies moves to simulation board
+- `animationLoop()` handles timing and state transitions
+- `updateMoveTracker()` syncs UI with animation state
+- `startSimulationAnimation()` triggered after bot move
+
+**Files Modified:**
+- `web/index.html`: Complete animation system with ~200 lines of new code
+
+### 🎨 Phase 7: Polish and Future Enhancements (TODO)
 - Speed control slider
 - Skip animation button
 - Pause/resume during simulation

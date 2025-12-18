@@ -191,6 +191,19 @@
     let currentDepth = 3;
     let simulationPaths = [];
 
+    // Animation state
+    let animationState = {
+      isAnimating: false,
+      currentBranch: 0,
+      currentMove: 0,
+      phase: 'idle', // 'idle' | 'animating' | 'scoring' | 'resetting'
+      simulationBoard: null,
+      realBoard: null,
+      lastUpdateTime: 0,
+      moveDelay: 800, // ms between moves
+      scoreDelay: 1500 // ms to show score
+    };
+
     const colors = {
       boardLight: "#f6e9d5",
       boardDark: "#8b5a2b",
@@ -283,12 +296,16 @@
                 if (simulationPaths.length > 1) {
                     console.log(`Branch 2: ${simulationPaths[1].moves.length} moves, score: ${simulationPaths[1].final_score}`);
                 }
-            }
 
-            await updateGameState();
-            const algoName = data.algorithm === 'minimax' ? 'Minimax' : 'Alpha-Beta';
-            const nodesText = data.nodes_explored ? ` (explored ${data.nodes_explored} positions)` : '';
-            document.getElementById("status").textContent = `Bot moved using ${algoName}${nodesText}. Your turn.`;
+                // Start simulation animation
+                startSimulationAnimation();
+            } else {
+                // No simulation paths, just update board
+                await updateGameState();
+                const algoName = data.algorithm === 'minimax' ? 'Minimax' : 'Alpha-Beta';
+                const nodesText = data.nodes_explored ? ` (explored ${data.nodes_explored} positions)` : '';
+                document.getElementById("status").textContent = `Bot moved using ${algoName}${nodesText}. Your turn.`;
+            }
         } catch (error) {
             console.error("Error getting bot move:", error);
         }
@@ -301,6 +318,164 @@
       // Count dark squares from top-left
       const squareNum = (row * 4) + Math.floor(col / 2) + 1;
       return squareNum;
+    }
+
+    function copyBoard(boardState) {
+      // Deep copy board state
+      return boardState.map(row => row.map(cell => cell ? {...cell} : null));
+    }
+
+    function applyMoveToBoard(boardState, fromPos, toPos) {
+      // Apply a move to a board (for simulation)
+      const [fromRow, fromCol] = fromPos;
+      const [toRow, toCol] = toPos;
+
+      const piece = boardState[fromRow][fromCol];
+      if (!piece) return;
+
+      // Move piece
+      boardState[toRow][toCol] = {...piece};
+      boardState[fromRow][fromCol] = null;
+
+      // Check for capture (jumped over a piece)
+      const rowDiff = Math.abs(toRow - fromRow);
+      if (rowDiff === 2) {
+        const capturedRow = (fromRow + toRow) / 2;
+        const capturedCol = (fromCol + toCol) / 2;
+        boardState[capturedRow][capturedCol] = null;
+      }
+
+      // Check for king promotion
+      if (piece.color === 'red' && toRow === 0) {
+        boardState[toRow][toCol].is_king = true;
+      } else if (piece.color === 'black' && toRow === 7) {
+        boardState[toRow][toCol].is_king = true;
+      }
+    }
+
+    function updateMoveTracker() {
+      if (!animationState.isAnimating || simulationPaths.length === 0) {
+        document.getElementById("branch-info").textContent = "";
+        document.getElementById("move-list").innerHTML = "";
+        document.getElementById("score-display").style.display = "none";
+        return;
+      }
+
+      const currentPath = simulationPaths[animationState.currentBranch];
+      const branchNum = animationState.currentBranch + 1;
+      const totalBranches = simulationPaths.length;
+
+      // Update branch info
+      document.getElementById("branch-info").textContent =
+        `Simulating Branch ${branchNum} of ${totalBranches}`;
+
+      // Update move list
+      let moveListHtml = '';
+      currentPath.moves.forEach((move, idx) => {
+        const isCurrentMove = idx === animationState.currentMove && animationState.phase === 'animating';
+        const moveClass = isCurrentMove ? 'move-item current' : 'move-item';
+        const playerLabel = move.player === 'black' ? 'AI' : 'You';
+        const notation = move.notation;
+        moveListHtml += `<div class="${moveClass}">${idx + 1}. ${playerLabel}: ${notation.from} → ${notation.to}</div>`;
+      });
+      document.getElementById("move-list").innerHTML = moveListHtml;
+
+      // Update score display
+      if (animationState.phase === 'scoring') {
+        const scoreEl = document.getElementById("score-display");
+        scoreEl.textContent = `Score: ${currentPath.final_score > 0 ? '+' : ''}${currentPath.final_score}`;
+        scoreEl.style.display = "block";
+      } else {
+        document.getElementById("score-display").style.display = "none";
+      }
+    }
+
+    function startSimulationAnimation() {
+      if (simulationPaths.length === 0) return;
+
+      // Initialize animation state
+      animationState.isAnimating = true;
+      animationState.currentBranch = 0;
+      animationState.currentMove = 0;
+      animationState.phase = 'animating';
+      animationState.realBoard = copyBoard(board);
+      animationState.simulationBoard = copyBoard(board);
+      animationState.lastUpdateTime = performance.now();
+
+      document.getElementById("status").textContent = "AI is simulating possible moves...";
+      updateMoveTracker();
+      drawBoard();
+
+      // Start animation loop
+      requestAnimationFrame(animationLoop);
+    }
+
+    function animationLoop(timestamp) {
+      if (!animationState.isAnimating) return;
+
+      const elapsed = timestamp - animationState.lastUpdateTime;
+
+      if (animationState.phase === 'animating') {
+        // Animate current move
+        if (elapsed >= animationState.moveDelay) {
+          const currentPath = simulationPaths[animationState.currentBranch];
+          const currentMove = currentPath.moves[animationState.currentMove];
+
+          // Apply move to simulation board
+          applyMoveToBoard(animationState.simulationBoard, currentMove.from, currentMove.to);
+          drawBoard();
+
+          // Move to next move or finish branch
+          animationState.currentMove++;
+          if (animationState.currentMove >= currentPath.moves.length) {
+            // All moves done, show score
+            animationState.phase = 'scoring';
+          }
+
+          animationState.lastUpdateTime = timestamp;
+          updateMoveTracker();
+        }
+      } else if (animationState.phase === 'scoring') {
+        // Show score for a moment
+        if (elapsed >= animationState.scoreDelay) {
+          // Move to next branch or finish
+          animationState.currentBranch++;
+          if (animationState.currentBranch >= simulationPaths.length) {
+            // All branches done
+            finishSimulation();
+            return;
+          } else {
+            // Reset for next branch
+            animationState.currentMove = 0;
+            animationState.phase = 'animating';
+            animationState.simulationBoard = copyBoard(animationState.realBoard);
+            animationState.lastUpdateTime = timestamp;
+            updateMoveTracker();
+            drawBoard();
+          }
+        }
+      }
+
+      requestAnimationFrame(animationLoop);
+    }
+
+    async function finishSimulation() {
+      // Animation done, now fetch the real game state with bot's actual move
+      animationState.isAnimating = false;
+
+      await updateGameState();
+
+      const algoName = currentAlgorithm === 'minimax' ? 'Minimax' : 'Alpha-Beta';
+      document.getElementById("status").textContent = `Bot has moved using ${algoName}. Your turn.`;
+      document.getElementById("branch-info").textContent = "";
+      document.getElementById("move-list").innerHTML = "";
+      document.getElementById("score-display").style.display = "none";
+
+      // Check for game over
+      if (winner) {
+        const winnerName = winner.charAt(0).toUpperCase() + winner.slice(1);
+        document.getElementById("status").textContent = `Game Over! ${winnerName} wins!`;
+      }
     }
 
     function drawBoard() {
@@ -322,13 +497,15 @@
         }
       }
 
-      if (board) drawPieces();
+      // Use simulation board if animating, otherwise real board
+      const displayBoard = animationState.isAnimating ? animationState.simulationBoard : board;
+      if (displayBoard) drawPieces(displayBoard);
       drawHighlights();
     }
 
-    function drawPieces() {
+    function drawPieces(boardState) {
       for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-        const piece = board[r][c];
+        const piece = boardState[r][c];
         if (piece && !(isDragging && selectedPiece && selectedPiece.row === r && selectedPiece.col === c)) {
             drawSinglePiece(boardCtx, piece, r, c);
         }
