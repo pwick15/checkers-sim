@@ -7,17 +7,22 @@ from pydantic import BaseModel
 from starlette.responses import FileResponse
 
 from .game import Game
-from .bot import AlphaBetaBot
+from .bot import MinimaxBot, AlphaBetaBot
 from .gui import CheckersUI # We need this for the tree serialization logic initially
 
 app = FastAPI()
 
 # In-memory storage for active games
+# Structure: {game_id: {"game": Game, "algorithm": str, "depth": int}}
 games = {}
 
 class Move(BaseModel):
     start_pos: list[int]
     end_pos: list[int]
+
+class GameConfig(BaseModel):
+    algorithm: str = "alphabeta"  # "minimax" or "alphabeta"
+    depth: int = 3
 
 @app.get("/")
 async def read_root():
@@ -27,13 +32,33 @@ async def read_root():
     return FileResponse('web/index.html')
 
 @app.post("/api/game")
-async def create_game():
+async def create_game(config: GameConfig = None):
     """
     Starts a new game and returns a unique game ID.
+    Accepts optional algorithm configuration.
     """
+    if config is None:
+        config = GameConfig()
+
+    # Validate algorithm choice
+    if config.algorithm not in ["minimax", "alphabeta"]:
+        raise HTTPException(status_code=400, detail="Algorithm must be 'minimax' or 'alphabeta'")
+
+    # Validate depth
+    if config.depth < 1 or config.depth > 6:
+        raise HTTPException(status_code=400, detail="Depth must be between 1 and 6")
+
     game_id = str(uuid.uuid4())
-    games[game_id] = Game(silent=True)
-    return {"game_id": game_id}
+    games[game_id] = {
+        "game": Game(silent=True),
+        "algorithm": config.algorithm,
+        "depth": config.depth
+    }
+    return {
+        "game_id": game_id,
+        "algorithm": config.algorithm,
+        "depth": config.depth
+    }
 
 @app.get("/api/game/{game_id}")
 async def get_game_state(game_id: str):
@@ -42,15 +67,16 @@ async def get_game_state(game_id: str):
     """
     if game_id not in games:
         raise HTTPException(status_code=404, detail="Game not found")
-    
-    game = games[game_id]
-    
-    # We need a way to serialize the board state to send to the frontend
-    # For now, let's just send the turn and winner
+
+    game_data = games[game_id]
+    game = game_data["game"]
+
     return {
         "current_turn": game.current_turn,
         "winner": game.winner,
-        "board": serialize_board(game.board)
+        "board": serialize_board(game.board),
+        "algorithm": game_data["algorithm"],
+        "depth": game_data["depth"]
     }
 
 @app.post("/api/game/{game_id}/move")
@@ -60,14 +86,15 @@ async def play_move(game_id: str, move: Move):
     """
     if game_id not in games:
         raise HTTPException(status_code=404, detail="Game not found")
-    
-    game = games[game_id]
-    
+
+    game_data = games[game_id]
+    game = game_data["game"]
+
     if game.is_over():
         raise HTTPException(status_code=400, detail="Game is over")
 
     success = game.play_move(tuple(move.start_pos), tuple(move.end_pos))
-    
+
     if not success:
         raise HTTPException(status_code=400, detail="Invalid move")
 
@@ -86,7 +113,10 @@ async def get_bot_move(game_id: str):
     if game_id not in games:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    game = games[game_id]
+    game_data = games[game_id]
+    game = game_data["game"]
+    algorithm = game_data["algorithm"]
+    depth = game_data["depth"]
 
     if game.is_over():
         raise HTTPException(status_code=400, detail="Game is over")
@@ -94,9 +124,14 @@ async def get_bot_move(game_id: str):
     if game.current_turn != 'black':
         raise HTTPException(status_code=400, detail="Not the bot's turn")
 
-    bot = AlphaBetaBot('black', depth=4)
+    # Create bot based on selected algorithm
+    if algorithm == "minimax":
+        bot = MinimaxBot('black', depth=depth)
+    else:  # alphabeta
+        bot = AlphaBetaBot('black', depth=depth)
+
     move = bot.get_move(game)
-    
+
     tree_data = None
     if hasattr(bot, 'last_decision_tree') and bot.last_decision_tree:
         # We need to serialize the tree. Let's borrow the logic from the GUI for now.
@@ -105,7 +140,6 @@ async def get_bot_move(game_id: str):
         gui_instance.game = game
         gui_instance.bot = bot
         tree_data = gui_instance._serialize_tree(bot.last_decision_tree)
-
 
     if move:
         game.play_move(move[0], move[1])
@@ -116,7 +150,9 @@ async def get_bot_move(game_id: str):
         "current_turn": game.current_turn,
         "winner": game.winner,
         "board": serialize_board(game.board),
-        "tree": tree_data
+        "tree": tree_data,
+        "algorithm": algorithm,
+        "nodes_explored": getattr(bot, 'nodes_explored', 0)
     }
 
 
