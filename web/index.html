@@ -489,12 +489,14 @@
             // Store simulation paths for animation
             simulationPaths = data.simulation_paths || [];
 
+            console.log(`Received ${simulationPaths.length} simulation paths from backend`);
+            console.log("Full response:", data);
+
             // Log simulation paths for testing
             if (simulationPaths.length > 0) {
-                console.log("Simulation paths received:", simulationPaths);
-                console.log(`Branch 1: ${simulationPaths[0].moves.length} moves, score: ${simulationPaths[0].final_score}`);
-                if (simulationPaths.length > 1) {
-                    console.log(`Branch 2: ${simulationPaths[1].moves.length} moves, score: ${simulationPaths[1].final_score}`);
+                console.log("First 3 branches:");
+                for (let i = 0; i < Math.min(3, simulationPaths.length); i++) {
+                    console.log(`  Branch ${i+1}: ${simulationPaths[i].moves.length} moves, score: ${simulationPaths[i].final_score}`);
                 }
 
                 // Start simulation animation
@@ -557,12 +559,17 @@
       gridState.totalBranches = totalBranches;
       gridState.exploredBranches = 0;
 
+      console.log(`Initializing grid with ${totalBranches} branches`);
+
       // Calculate grid size (square root, rounded up)
       gridState.gridSize = Math.ceil(Math.sqrt(totalBranches));
 
-      // Calculate dot size based on canvas size
+      // Calculate dot size based on canvas size with max limit
       const availableSize = Math.min(gridCanvas.width, gridCanvas.height) - (gridState.padding * 2);
-      gridState.dotSize = Math.floor(availableSize / gridState.gridSize) - 2;
+      const calculatedSize = Math.floor(availableSize / gridState.gridSize) - 2;
+      gridState.dotSize = Math.min(calculatedSize, 12); // Max 12px dots
+
+      console.log(`Grid: ${gridState.gridSize}x${gridState.gridSize}, Dot size: ${gridState.dotSize}px`);
 
       drawGrid();
     }

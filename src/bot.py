@@ -135,12 +135,16 @@ class MinimaxBot(BotPlayer):
             list: List of simulation path dictionaries
         """
         if not self.last_decision_tree or not self.last_decision_tree.children:
+            print("No decision tree or no children")
             return []
 
         paths = []
         opponent_color = 'black' if self.color == 'red' else 'red'
 
         # Get all branches sorted by score (best first)
+        total_children = len(self.last_decision_tree.children)
+        print(f"Decision tree has {total_children} children (possible first moves)")
+
         branches = sorted(self.last_decision_tree.children,
                          key=lambda n: n.score if n.score is not None else float('-inf'),
                          reverse=True)
@@ -148,6 +152,9 @@ class MinimaxBot(BotPlayer):
         # Limit to num_branches if specified
         if num_branches is not None:
             branches = branches[:num_branches]
+            print(f"Limited to {num_branches} branches")
+        else:
+            print(f"Extracting all {len(branches)} branches")
 
         for idx, branch in enumerate(branches):
             moves = []
@@ -191,6 +198,7 @@ class MinimaxBot(BotPlayer):
                 "final_score": branch.score
             })
 
+        print(f"Returning {len(paths)} simulation paths")
         return paths
 
     def get_move(self, game):

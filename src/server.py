@@ -145,6 +145,7 @@ async def get_bot_move(game_id: str):
         # Extract simulation paths for animation (all branches)
         if hasattr(bot, 'extract_simulation_paths'):
             simulation_paths = bot.extract_simulation_paths()  # Get all branches
+            print(f"Server: Extracted {len(simulation_paths)} paths from bot")
             # Add notation to each move for display
             for path in simulation_paths:
                 for move_data in path['moves']:
@@ -154,6 +155,7 @@ async def get_bot_move(game_id: str):
                         'from': pos_to_notation(from_pos[0], from_pos[1]),
                         'to': pos_to_notation(to_pos[0], to_pos[1])
                     }
+            print(f"Server: About to return {len(simulation_paths)} paths in response")
 
     if move:
         game.play_move(move[0], move[1])
