@@ -17,40 +17,50 @@
       align-items: center;
       width: 100vw;
       height: 100vh;
+      overflow: hidden;
     }
     #main-container {
         display: flex;
-        flex-direction: column;
-        gap: 15px;
+        gap: 30px;
         align-items: center;
+        justify-content: center;
+        padding: 20px;
+        width: 100%;
+        max-width: 1400px;
     }
-    #top-container {
-      display: flex;
-      gap: 20px;
-      align-items: flex-start;
-      padding: 15px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 10px;
-      background: rgba(12, 14, 20, 0.72);
-      backdrop-filter: blur(10px);
+    #board-container {
+      flex: 0 0 auto;
     }
     #board-canvas {
-      border-radius: 4px;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
-    #hud {
-      width: 280px;
+    #sidebar {
+      flex: 1;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
-    #hud h1 {
-      margin: 0 0 10px;
-      font-size: 20px;
-      font-weight: 700;
+    .panel {
+      background: rgba(28, 35, 48, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
     }
-    #controls, #playback-controls {
+    .panel h2 {
+      margin: 0 0 15px 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #e5ecf5;
+    }
+    #controls {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
       align-items: center;
-      margin-bottom: 10px;
+      margin-bottom: 15px;
     }
     select {
       background: #1c2330;
@@ -81,56 +91,92 @@
     button:hover {
       background: #222c3d;
     }
-    #status, #tree-status {
+    #status {
       font-size: 14px;
       color: #d7e5ff;
       line-height: 1.5;
-      min-height: 20px;
+      padding: 12px;
+      background: rgba(13, 15, 21, 0.5);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
     }
-    #tree-canvas {
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+    #simulation-tracker {
+      min-height: 200px;
+    }
+    #move-list {
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      line-height: 1.8;
+      color: #b8c5d6;
+    }
+    .move-item {
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .move-item.current {
+      background: rgba(251, 192, 45, 0.2);
+      color: #fbc02d;
+      font-weight: 600;
+    }
+    #branch-info {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #fbc02d;
+    }
+    #score-display {
+      font-size: 24px;
+      font-weight: 700;
+      text-align: center;
+      padding: 20px;
+      margin-top: 10px;
+      background: rgba(251, 192, 45, 0.1);
+      border-radius: 8px;
+      color: #fbc02d;
     }
   </style>
 </head>
 <body>
 
   <div id="main-container">
-    <div id="top-container">
-        <canvas id="board-canvas" width="320" height="320"></canvas>
-        <div id="hud">
-          <h1>Checkers AI</h1>
-          <div id="controls">
-            <button id="newGame">New Game</button>
-          </div>
-          <div style="margin-bottom: 10px;">
-            <label for="algorithm">Algorithm:</label>
-            <select id="algorithm">
-              <option value="minimax">Minimax</option>
-              <option value="alphabeta" selected>Alpha-Beta Pruning</option>
-            </select>
-            <div class="info-text" id="algorithmInfo">Optimized search with pruning</div>
-          </div>
-          <div id="status">Welcome! Select algorithm and click "New Game".</div>
-          <hr>
-          <div id="tree-status"></div>
-          <div id="playback-controls">
-             <button id="play">▶</button>
-             <button id="pause">⏸</button>
-             <button id="stepBack">←</button>
-             <button id="stepFwd">→</button>
-          </div>
-        </div>
+    <!-- Left: Board -->
+    <div id="board-container">
+      <canvas id="board-canvas" width="480" height="480"></canvas>
     </div>
-    <canvas id="tree-canvas" width="740" height="450"></canvas>
+
+    <!-- Right: Controls and Tracker -->
+    <div id="sidebar">
+      <!-- Controls Panel -->
+      <div class="panel">
+        <h2>Checkers AI Simulator</h2>
+        <div id="controls">
+          <button id="newGame">New Game</button>
+        </div>
+        <div style="margin-bottom: 10px;">
+          <label for="algorithm">Algorithm:</label>
+          <select id="algorithm">
+            <option value="minimax">Minimax</option>
+            <option value="alphabeta" selected>Alpha-Beta Pruning</option>
+          </select>
+          <div class="info-text" id="algorithmInfo">Optimized search with pruning</div>
+        </div>
+        <div id="status">Welcome! Select algorithm and click "New Game".</div>
+      </div>
+
+      <!-- Simulation Tracker Panel -->
+      <div class="panel" id="simulation-tracker">
+        <h2>AI Simulation</h2>
+        <div id="branch-info"></div>
+        <div id="move-list"></div>
+        <div id="score-display" style="display: none;"></div>
+      </div>
+    </div>
   </div>
 
   <script>
     const boardCanvas = document.getElementById("board-canvas");
     const boardCtx = boardCanvas.getContext("2d");
-    const treeCanvas = document.getElementById("tree-canvas");
-    const treeCtx = treeCanvas.getContext("2d");
-
     const SQUARE_SIZE = boardCanvas.width / 8;
 
     let gameId = null;
@@ -143,14 +189,7 @@
     let dragPos = { x: 0, y: 0 };
     let currentAlgorithm = 'alphabeta';
     let currentDepth = 3;
-
-    // Tree and animation state
-    let lastTree = null;
-    let animationFrames = [];
-    let frameIndex = 0;
-    let isPlaying = false;
-    let lastTick = performance.now();
-    let frameDelay = 80; // ms
+    let simulationPaths = [];
 
     const colors = {
       boardLight: "#f6e9d5",
@@ -159,12 +198,7 @@
       blackPiece: "#1c1c1c",
       king: "#fbc02d",
       validMove: "rgba(46, 125, 50, 0.5)",
-      selected: "rgba(255, 193, 7, 0.5)",
-      treeBg: "#0d0f15",
-      current: "#fbc02d",
-      visited: "#f5d77a",
-      pruned: "#2f3542",
-      unvisited: "#5a6475",
+      selected: "rgba(255, 193, 7, 0.5)"
     };
 
     async function newGame() {
@@ -182,15 +216,13 @@
         gameId = data.game_id;
         currentAlgorithm = data.algorithm;
         currentDepth = data.depth;
-        lastTree = null;
-        animationFrames = [];
-        frameIndex = 0;
-        isPlaying = false;
+        simulationPaths = [];
         await updateGameState();
         const algoName = currentAlgorithm === 'minimax' ? 'Minimax' : 'Alpha-Beta Pruning';
         document.getElementById("status").textContent = `New game started (${algoName}). Red's turn.`;
-        document.getElementById("tree-status").textContent = "AI analysis will appear here.";
-        drawTree();
+        document.getElementById("branch-info").textContent = "";
+        document.getElementById("move-list").textContent = "";
+        document.getElementById("score-display").style.display = "none";
       } catch (error) {
         console.error("Error starting new game:", error);
       }
@@ -240,17 +272,16 @@
         try {
             const response = await fetch(`/api/game/${gameId}/bot-move`, { method: "POST" });
             const data = await response.json();
-            lastTree = data.tree;
-            animationFrames = data.tree ? data.tree.frames : [];
-            frameIndex = 0;
-            isPlaying = true;
+
+            // Store simulation paths for animation
+            simulationPaths = data.simulation_paths || [];
 
             // Log simulation paths for testing
-            if (data.simulation_paths && data.simulation_paths.length > 0) {
-                console.log("Simulation paths received:", data.simulation_paths);
-                console.log(`Branch 1: ${data.simulation_paths[0].moves.length} moves, score: ${data.simulation_paths[0].final_score}`);
-                if (data.simulation_paths.length > 1) {
-                    console.log(`Branch 2: ${data.simulation_paths[1].moves.length} moves, score: ${data.simulation_paths[1].final_score}`);
+            if (simulationPaths.length > 0) {
+                console.log("Simulation paths received:", simulationPaths);
+                console.log(`Branch 1: ${simulationPaths[0].moves.length} moves, score: ${simulationPaths[0].final_score}`);
+                if (simulationPaths.length > 1) {
+                    console.log(`Branch 2: ${simulationPaths[1].moves.length} moves, score: ${simulationPaths[1].final_score}`);
                 }
             }
 
@@ -258,20 +289,39 @@
             const algoName = data.algorithm === 'minimax' ? 'Minimax' : 'Alpha-Beta';
             const nodesText = data.nodes_explored ? ` (explored ${data.nodes_explored} positions)` : '';
             document.getElementById("status").textContent = `Bot moved using ${algoName}${nodesText}. Your turn.`;
-            if (lastTree) {
-                showTree();
-            }
         } catch (error) {
             console.error("Error getting bot move:", error);
         }
     }
 
+    function posToNotation(row, col) {
+      // Only dark squares are numbered
+      if ((row + col) % 2 === 0) return null; // Light square
+
+      // Count dark squares from top-left
+      const squareNum = (row * 4) + Math.floor(col / 2) + 1;
+      return squareNum;
+    }
+
     function drawBoard() {
       boardCtx.clearRect(0, 0, boardCanvas.width, boardCanvas.height);
+
+      // Draw squares
       for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
         boardCtx.fillStyle = (r + c) % 2 === 1 ? colors.boardDark : colors.boardLight;
         boardCtx.fillRect(c * SQUARE_SIZE, r * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE);
       }
+
+      // Draw square numbers on dark squares
+      boardCtx.font = '10px Arial';
+      boardCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+        const notation = posToNotation(r, c);
+        if (notation) {
+          boardCtx.fillText(notation.toString(), c * SQUARE_SIZE + 3, r * SQUARE_SIZE + 12);
+        }
+      }
+
       if (board) drawPieces();
       drawHighlights();
     }
@@ -366,136 +416,8 @@
         });
     }
 
-    // --- Tree Viewer Logic ---
-    let treePositions = new Map();
-    const treeViewport = { scale: 0.5, offsetX: 0, offsetY: 0, dragging: false, dragStart: {x:0,y:0}, startOffset: {x:0,y:0} };
-
-    function showTree() {
-        if (!lastTree) return;
-        treePositions = layoutTree(lastTree);
-        fitTreeView();
-        drawTree();
-    }
-
-    function layoutTree(tree) {
-      const children = new Map();
-      tree.nodes.forEach(n => children.set(n.id, []));
-      tree.edges.forEach(e => children.get(e.from).push(e.to));
-      const subtreeSize = new Map();
-      function count(id) {
-        const kids = children.get(id) || [];
-        if (!kids.length) { subtreeSize.set(id, 1); return 1; }
-        let total = kids.reduce((acc, c) => acc + count(c), 0);
-        subtreeSize.set(id, total); return total;
-      }
-      count(0);
-      const pos = new Map();
-      function assign(id, depth, left, right) {
-        pos.set(id, { x: left + (right - left) / 2, y: depth * 80 });
-        const kids = children.get(id) || [];
-        if (!kids.length) return;
-        const total = kids.reduce((acc, c) => acc + subtreeSize.get(c), 0);
-        let cur = left;
-        for (const c of kids) {
-          const share = (right - left) * (subtreeSize.get(c) / total);
-          assign(c, depth + 1, cur, cur + share);
-          cur += share;
-        }
-      }
-      assign(0, 0, 0, 4000);
-      return pos;
-    }
-
-    function fitTreeView() {
-      if (!treePositions.size) return;
-      const xs = [...treePositions.values()].map(p => p.x);
-      const ys = [...treePositions.values()].map(p => p.y);
-      const minX = Math.min(...xs), maxX = Math.max(...xs);
-      const minY = Math.min(...ys), maxY = Math.max(...ys);
-      const spanX = maxX - minX || 1, spanY = maxY - minY || 1;
-      const pad = 50;
-      const scaleX = (treeCanvas.width - pad*2) / spanX, scaleY = (treeCanvas.height - pad*2) / spanY;
-      treeViewport.scale = Math.min(scaleX, scaleY) * 0.95;
-      const centerX = (minX + maxX) / 2, centerY = (minY + maxY) / 2;
-      treeViewport.offsetX = treeCanvas.width/2 - centerX*treeViewport.scale;
-      treeViewport.offsetY = treeCanvas.height/2 - centerY*treeViewport.scale;
-    }
-
-    function drawTree() {
-        treeCtx.fillStyle = colors.treeBg;
-        treeCtx.fillRect(0, 0, treeCanvas.width, treeCanvas.height);
-        if (!lastTree) return;
-
-        treeCtx.save();
-        treeCtx.translate(treeViewport.offsetX, treeViewport.offsetY);
-        treeCtx.scale(treeViewport.scale, treeViewport.scale);
-
-        const visited = new Set();
-        const current = animationFrames[frameIndex] || null;
-        for (let i = 0; i <= frameIndex; i++) {
-            const f = animationFrames[i];
-            if (f && f.edge && f.edge[0] != null && f.edge[1] != null) visited.add(`${f.edge[0]}-${f.edge[1]}`);
-        }
-
-        treeCtx.lineWidth = 2 / treeViewport.scale;
-        treeCtx.lineCap = "round";
-
-        for (const e of lastTree.edges) {
-            const from = treePositions.get(e.from), to = treePositions.get(e.to);
-            if (!from || !to) continue;
-            const key = `${e.from}-${e.to}`;
-            const isCurrent = current && current.edge && key === `${current.edge[0]}-${current.edge[1]}`;
-            
-            let color = colors.unvisited;
-            if (e.is_pruned) color = colors.pruned;
-            else if (isCurrent) color = colors.current;
-            else if (visited.has(key)) color = colors.visited;
-            
-            treeCtx.strokeStyle = color;
-            treeCtx.beginPath(); treeCtx.moveTo(from.x, from.y); treeCtx.lineTo(to.x, to.y); treeCtx.stroke();
-        }
-        treeCtx.restore();
-        updateTreeStatus();
-    }
-
-    function updateTreeStatus() {
-        const statusEl = document.getElementById("tree-status");
-        if (!animationFrames.length) {
-            statusEl.textContent = "AI analysis will appear here.";
-            return;
-        }
-        const current = animationFrames[frameIndex] || null;
-        const frameText = `Frame: ${Math.min(frameIndex + 1, animationFrames.length)} / ${animationFrames.length}`;
-        if (current && current.edge) {
-            const child = lastTree.nodes.find(n => n.id === current.edge[1]);
-            const move = child?.move_notation;
-            const moveText = move ? `${move.from} → ${move.to}` : "Root";
-            const scoreText = current.node_score == null ? "pending" : `${current.node_score}`;
-            statusEl.innerHTML = `${frameText}<br>Branch: ${moveText} | Eval: ${scoreText}`;
-        } else {
-            statusEl.textContent = frameText;
-        }
-    }
-    
-    function tick(now) {
-        if (isPlaying && animationFrames.length && now - lastTick > frameDelay) {
-            lastTick = now;
-            if (frameIndex < animationFrames.length - 1) {
-                frameIndex++;
-                drawTree();
-            } else {
-                isPlaying = false;
-            }
-        }
-        requestAnimationFrame(tick);
-    }
-
     // Event Listeners
     document.getElementById("newGame").addEventListener("click", newGame);
-    document.getElementById("play").onclick = () => isPlaying = true;
-    document.getElementById("pause").onclick = () => isPlaying = false;
-    document.getElementById("stepFwd").onclick = () => { isPlaying = false; frameIndex = Math.min(animationFrames.length - 1, frameIndex + 1); drawTree(); };
-    document.getElementById("stepBack").onclick = () => { isPlaying = false; frameIndex = Math.max(0, frameIndex - 1); drawTree(); };
 
     // Algorithm selector change handler
     document.getElementById("algorithm").addEventListener("change", function(e) {
@@ -505,21 +427,14 @@
         : "Optimized search with pruning";
       document.getElementById("algorithmInfo").textContent = infoText;
     });
-    
+
     boardCanvas.addEventListener("pointerdown", onBoardPointerDown);
     boardCanvas.addEventListener("pointermove", onBoardPointerMove);
     boardCanvas.addEventListener("pointerup", onBoardPointerUp);
     boardCanvas.addEventListener("pointerleave", () => { if (isDragging) { isDragging = false; selectedPiece = null; validMoves = []; drawBoard(); }});
 
-    treeCanvas.addEventListener("wheel", e => { e.preventDefault(); const { offsetX, offsetY, deltaY } = e; const zoom = Math.exp(-deltaY * 0.001); const wx = (offsetX - treeViewport.offsetX) / treeViewport.scale; const wy = (offsetY - treeViewport.offsetY) / treeViewport.scale; treeViewport.scale *= zoom; treeViewport.offsetX = offsetX - wx * treeViewport.scale; treeViewport.offsetY = offsetY - wy * treeViewport.scale; drawTree(); }, { passive: false });
-    treeCanvas.addEventListener("pointerdown", e => { treeViewport.dragging = true; treeViewport.dragStart = { x: e.clientX, y: e.clientY }; treeViewport.startOffset = { x: treeViewport.offsetX, y: treeViewport.offsetY }; treeCanvas.setPointerCapture(e.pointerId); });
-    treeCanvas.addEventListener("pointermove", e => { if (!treeViewport.dragging) return; const dx = e.clientX - treeViewport.dragStart.x, dy = e.clientY - treeViewport.dragStart.y; treeViewport.offsetX = treeViewport.startOffset.x + dx; treeViewport.offsetY = treeViewport.startOffset.y + dy; drawTree(); });
-    treeCanvas.addEventListener("pointerup", e => { treeViewport.dragging = false; treeCanvas.releasePointerCapture(e.pointerId); });
-
     // Initial setup
     drawBoard();
-    drawTree();
-    requestAnimationFrame(tick);
 
   </script>
 </body>
