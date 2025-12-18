@@ -354,28 +354,33 @@
     let currentAlgorithm = 'alphabeta';
     let currentDepth = 3;
     let simulationPaths = [];
+    let allNodes = [];  // ALL nodes explored in the tree
 
     // Animation state
     let animationState = {
       isAnimating: false,
       currentBranch: 0,
       currentMove: 0,
+      currentNodeIndex: 0,  // Track which node we're on in all_nodes
       phase: 'idle', // 'idle' | 'animating' | 'scoring' | 'resetting'
       simulationBoard: null,
       realBoard: null,
       lastUpdateTime: 0,
-      moveDelay: 800, // ms between moves
+      moveDelay: 800, // ms between moves (for top 5)
+      fastMoveDelay: 200, // ms for non-top-5
       scoreDelay: 1500, // ms to show score
       speed: 1.0 // speed multiplier (0.5 = slower, 2 = faster)
     };
 
     // Grid visualization state
     let gridState = {
-      totalBranches: 0,
-      exploredBranches: 0,
+      totalNodes: 0,
+      exploredNodes: 0,
       gridSize: 0,
       dotSize: 0,
-      padding: 10
+      padding: 10,
+      nodePositions: [],  // Array of {x, y, nodeData}
+      hoveredNode: null
     };
 
     const colors = {
@@ -486,23 +491,35 @@
             const response = await fetch(`/api/game/${gameId}/bot-move`, { method: "POST" });
             const data = await response.json();
 
-            // Store simulation paths for animation
+            // Store simulation paths for board animation (top 5)
             simulationPaths = data.simulation_paths || [];
 
-            console.log(`Received ${simulationPaths.length} simulation paths from backend`);
-            console.log("Full response:", data);
+            // Store node stats for grid visualization (lightweight)
+            const nodeStats = data.node_stats || {};
+            const totalNodes = nodeStats.total_nodes || 0;
+            const branches = nodeStats.branches || [];
 
-            // Log simulation paths for testing
+            console.log(`Received ${simulationPaths.length} simulation paths (for board display)`);
+            console.log(`Received node stats: ${totalNodes} total nodes across ${branches.length} branches`);
+
             if (simulationPaths.length > 0) {
-                console.log("First 3 branches:");
-                for (let i = 0; i < Math.min(3, simulationPaths.length); i++) {
-                    console.log(`  Branch ${i+1}: ${simulationPaths[i].moves.length} moves, score: ${simulationPaths[i].final_score}`);
-                }
+                // Create simplified node array for grid (just counts, not full data)
+                allNodes = [];
+                branches.forEach(branch => {
+                    for (let i = 0; i < branch.nodes; i++) {
+                        allNodes.push({
+                            branch_index: branch.index,
+                            is_top_5: branch.is_top_5
+                        });
+                    }
+                });
+
+                console.log(`Created ${allNodes.length} grid nodes for visualization`);
 
                 // Start simulation animation
                 startSimulationAnimation();
             } else {
-                // No simulation paths, just update board
+                // No simulation data, just update board
                 await updateGameState();
                 const algoName = data.algorithm === 'minimax' ? 'Minimax' : 'Alpha-Beta';
                 const nodesText = data.nodes_explored ? ` (explored ${data.nodes_explored} positions)` : '';
@@ -555,19 +572,40 @@
       }
     }
 
-    function initializeGrid(totalBranches) {
-      gridState.totalBranches = totalBranches;
-      gridState.exploredBranches = 0;
+    function initializeGrid(totalNodes) {
+      gridState.totalNodes = totalNodes;
+      gridState.exploredNodes = 0;
 
-      console.log(`Initializing grid with ${totalBranches} branches`);
+      console.log(`Initializing grid with ${totalNodes} nodes`);
 
       // Calculate grid size (square root, rounded up)
-      gridState.gridSize = Math.ceil(Math.sqrt(totalBranches));
+      gridState.gridSize = Math.ceil(Math.sqrt(totalNodes));
 
       // Calculate dot size based on canvas size with max limit
       const availableSize = Math.min(gridCanvas.width, gridCanvas.height) - (gridState.padding * 2);
       const calculatedSize = Math.floor(availableSize / gridState.gridSize) - 2;
-      gridState.dotSize = Math.min(calculatedSize, 12); // Max 12px dots
+      gridState.dotSize = Math.min(calculatedSize, 8); // Max 8px dots
+
+      // Pre-calculate positions for all dots
+      const spacing = gridState.dotSize + 2;
+      const totalWidth = gridState.gridSize * spacing;
+      const totalHeight = gridState.gridSize * spacing;
+      const offsetX = (gridCanvas.width - totalWidth) / 2 + gridState.dotSize / 2;
+      const offsetY = (gridCanvas.height - totalHeight) / 2 + gridState.dotSize / 2;
+
+      gridState.nodePositions = [];
+      let nodeIndex = 0;
+      for (let row = 0; row < gridState.gridSize; row++) {
+        for (let col = 0; col < gridState.gridSize; col++) {
+          if (nodeIndex >= totalNodes) break;
+          gridState.nodePositions.push({
+            x: offsetX + col * spacing,
+            y: offsetY + row * spacing,
+            nodeData: allNodes[nodeIndex]
+          });
+          nodeIndex++;
+        }
+      }
 
       console.log(`Grid: ${gridState.gridSize}x${gridState.gridSize}, Dot size: ${gridState.dotSize}px`);
 
@@ -577,99 +615,63 @@
     function drawGrid() {
       gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
 
-      const { gridSize, dotSize, padding, totalBranches, exploredBranches } = gridState;
-      const spacing = dotSize + 2;
+      const { exploredNodes, dotSize, nodePositions } = gridState;
 
-      // Center the grid
-      const totalWidth = gridSize * spacing;
-      const totalHeight = gridSize * spacing;
-      const offsetX = (gridCanvas.width - totalWidth) / 2 + dotSize / 2;
-      const offsetY = (gridCanvas.height - totalHeight) / 2 + dotSize / 2;
+      // Draw all dots
+      nodePositions.forEach((pos, index) => {
+        const { x, y, nodeData } = pos;
 
-      let dotIndex = 0;
-      for (let row = 0; row < gridSize; row++) {
-        for (let col = 0; col < gridSize; col++) {
-          if (dotIndex >= totalBranches) break;
-
-          const x = offsetX + col * spacing;
-          const y = offsetY + row * spacing;
-
-          // Color based on exploration status
-          if (dotIndex < exploredBranches) {
-            gridCtx.fillStyle = '#fbc02d'; // Yellow for explored
-          } else if (dotIndex === exploredBranches) {
-            gridCtx.fillStyle = '#f9a825'; // Brighter yellow for current
-          } else {
-            gridCtx.fillStyle = 'rgba(255, 255, 255, 0.15)'; // Gray for unexplored
-          }
-
-          gridCtx.beginPath();
-          gridCtx.arc(x, y, dotSize / 2, 0, Math.PI * 2);
-          gridCtx.fill();
-
-          dotIndex++;
+        // Determine color based on node status
+        let fillColor;
+        if (index < exploredNodes) {
+          // Explored: Green for top 5 branches, yellow for others
+          fillColor = nodeData.is_top_5 ? '#4caf50' : '#fbc02d';
+        } else if (index === exploredNodes) {
+          // Currently exploring
+          fillColor = nodeData.is_top_5 ? '#66bb6a' : '#f9a825';
+        } else {
+          // Unexplored
+          fillColor = 'rgba(255, 255, 255, 0.15)';
         }
-      }
+
+        gridCtx.fillStyle = fillColor;
+        gridCtx.beginPath();
+        gridCtx.arc(x, y, dotSize / 2, 0, Math.PI * 2);
+        gridCtx.fill();
+      });
     }
 
-    function updateMoveTracker() {
-      if (!animationState.isAnimating || simulationPaths.length === 0) {
-        document.getElementById("branch-info").textContent = "";
-        document.getElementById("score-display").classList.remove("visible");
+    // updateMoveTracker removed - grid updates happen in animation loop now
+
+    function startSimulationAnimation() {
+      console.log(`startSimulationAnimation called with ${allNodes.length} nodes`);
+
+      if (allNodes.length === 0) {
+        console.error("No nodes to animate!");
         return;
       }
 
-      const currentPath = simulationPaths[animationState.currentBranch];
-      const branchNum = animationState.currentBranch + 1;
-      const totalBranches = simulationPaths.length;
-
-      // Update branch info
-      let statusText = `Exploring ${totalBranches} possible moves (Branch ${branchNum})`;
-
-      if (animationState.currentBranch < 3) {
-        // Show detailed info for first 3 branches
-        const currentMove = currentPath.moves[animationState.currentMove];
-        if (currentMove && animationState.phase === 'animating') {
-          const playerLabel = currentMove.player === 'black' ? 'AI' : 'You';
-          const notation = currentMove.notation;
-          statusText += ` - ${playerLabel}: ${notation.from} → ${notation.to}`;
-        }
-      }
-
-      document.getElementById("branch-info").textContent = statusText;
-
-      // Update score display
-      const scoreEl = document.getElementById("score-display");
-      if (animationState.phase === 'scoring') {
-        scoreEl.textContent = `Score: ${currentPath.final_score > 0 ? '+' : ''}${currentPath.final_score}`;
-        scoreEl.classList.add("visible");
-      } else {
-        scoreEl.classList.remove("visible");
-      }
-
-      // Update grid
-      gridState.exploredBranches = branchNum;
-      drawGrid();
-    }
-
-    function startSimulationAnimation() {
-      if (simulationPaths.length === 0) return;
-
-      // Initialize grid
-      initializeGrid(simulationPaths.length);
+      // Initialize grid with ALL nodes
+      initializeGrid(allNodes.length);
 
       // Initialize animation state
       animationState.isAnimating = true;
       animationState.currentBranch = 0;
       animationState.currentMove = 0;
+      animationState.currentNodeIndex = 0;
       animationState.phase = 'animating';
       animationState.realBoard = copyBoard(board);
       animationState.simulationBoard = copyBoard(board);
       animationState.lastUpdateTime = performance.now();
 
-      document.getElementById("status").textContent = "AI is exploring all possible moves...";
-      updateMoveTracker();
+      document.getElementById("status").textContent = `AI is exploring ${allNodes.length} possible positions...`;
+
+      // Force initial draw
+      gridState.exploredNodes = 1;
+      drawGrid();
       drawBoard();
+
+      console.log("Animation started, grid should be visible");
 
       // Start animation loop
       requestAnimationFrame(animationLoop);
@@ -679,56 +681,26 @@
       if (!animationState.isAnimating) return;
 
       const elapsed = timestamp - animationState.lastUpdateTime;
-      const showDetailedAnimation = animationState.currentBranch < 3; // Only first 3 branches
+      const currentNode = allNodes[animationState.currentNodeIndex];
 
-      if (animationState.phase === 'animating') {
-        const moveDelay = showDetailedAnimation ? (animationState.moveDelay / animationState.speed) : 50; // Fast for branches 4+
+      // Speed based on whether this is a top 5 branch
+      const delay = currentNode && currentNode.is_top_5 ?
+        (animationState.moveDelay / animationState.speed) :
+        (animationState.fastMoveDelay / animationState.speed);
 
-        // Animate current move
-        if (elapsed >= moveDelay) {
-          const currentPath = simulationPaths[animationState.currentBranch];
-          const currentMove = currentPath.moves[animationState.currentMove];
+      if (elapsed >= delay) {
+        // Move to next node
+        animationState.currentNodeIndex++;
+        gridState.exploredNodes = animationState.currentNodeIndex;
+        drawGrid();
 
-          if (showDetailedAnimation) {
-            // Apply move to simulation board and show on screen
-            applyMoveToBoard(animationState.simulationBoard, currentMove.from, currentMove.to);
-            drawBoard();
-          }
-
-          // Move to next move or finish branch
-          animationState.currentMove++;
-          if (animationState.currentMove >= currentPath.moves.length) {
-            // All moves done, show score (only for detailed branches)
-            animationState.phase = 'scoring';
-          }
-
-          animationState.lastUpdateTime = timestamp;
-          updateMoveTracker();
+        // Check if done
+        if (animationState.currentNodeIndex >= allNodes.length) {
+          finishSimulation();
+          return;
         }
-      } else if (animationState.phase === 'scoring') {
-        const scoreDelay = showDetailedAnimation ? (animationState.scoreDelay / animationState.speed) : 100;
 
-        // Show score for a moment
-        if (elapsed >= scoreDelay) {
-          // Move to next branch or finish
-          animationState.currentBranch++;
-          if (animationState.currentBranch >= simulationPaths.length) {
-            // All branches done
-            finishSimulation();
-            return;
-          } else {
-            // Reset for next branch
-            animationState.currentMove = 0;
-            animationState.phase = 'animating';
-            if (animationState.currentBranch < 3) {
-              // Reset simulation board for detailed animation
-              animationState.simulationBoard = copyBoard(animationState.realBoard);
-            }
-            animationState.lastUpdateTime = timestamp;
-            updateMoveTracker();
-            drawBoard();
-          }
-        }
+        animationState.lastUpdateTime = timestamp;
       }
 
       requestAnimationFrame(animationLoop);

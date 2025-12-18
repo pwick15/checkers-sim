@@ -142,9 +142,9 @@ async def get_bot_move(game_id: str):
         gui_instance.bot = bot
         tree_data = gui_instance._serialize_tree(bot.last_decision_tree)
 
-        # Extract simulation paths for animation (all branches)
+        # Extract simulation paths for animation (first 5 branches for board display)
         if hasattr(bot, 'extract_simulation_paths'):
-            simulation_paths = bot.extract_simulation_paths()  # Get all branches
+            simulation_paths = bot.extract_simulation_paths(num_branches=5)  # Top 5 for detailed animation
             print(f"Server: Extracted {len(simulation_paths)} paths from bot")
             # Add notation to each move for display
             for path in simulation_paths:
@@ -157,6 +157,12 @@ async def get_bot_move(game_id: str):
                     }
             print(f"Server: About to return {len(simulation_paths)} paths in response")
 
+        # Get node counts for grid visualization (lightweight)
+        node_stats = {}
+        if hasattr(bot, 'get_node_count_by_branch'):
+            node_stats = bot.get_node_count_by_branch()
+            print(f"Server: Tree has {node_stats.get('total_nodes', 0)} total nodes")
+
     if move:
         game.play_move(move[0], move[1])
 
@@ -168,6 +174,7 @@ async def get_bot_move(game_id: str):
         "board": serialize_board(game.board),
         "tree": tree_data,
         "simulation_paths": simulation_paths,
+        "node_stats": node_stats,
         "algorithm": algorithm,
         "nodes_explored": getattr(bot, 'nodes_explored', 0)
     }

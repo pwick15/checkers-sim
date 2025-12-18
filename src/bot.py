@@ -201,6 +201,42 @@ class MinimaxBot(BotPlayer):
         print(f"Returning {len(paths)} simulation paths")
         return paths
 
+    def get_node_count_by_branch(self):
+        """
+        Get count of nodes explored per branch (lightweight).
+        Returns: { 'total_nodes': int, 'branches': [{ 'index': int, 'is_top_5': bool, 'nodes': int, 'score': float }] }
+        """
+        if not self.last_decision_tree:
+            return {'total_nodes': 0, 'branches': []}
+
+        # Get top-level branches sorted by score
+        top_branches = sorted(self.last_decision_tree.children,
+                            key=lambda n: n.score if n.score is not None else float('-inf'),
+                            reverse=True)
+
+        def count_descendants(node):
+            """Count all descendant nodes"""
+            count = 1  # Count this node
+            for child in node.children:
+                count += count_descendants(child)
+            return count
+
+        branches_info = []
+        total = 0
+        for idx, branch in enumerate(top_branches):
+            node_count = count_descendants(branch)
+            total += node_count
+            branches_info.append({
+                'index': idx,
+                'is_top_5': idx < 5,
+                'nodes': node_count,
+                'score': branch.score,
+                'move': branch.move
+            })
+
+        print(f"Total nodes in tree: {total}")
+        return {'total_nodes': total, 'branches': branches_info}
+
     def get_move(self, game):
         """Get the best move using minimax algorithm."""
         self.nodes_explored = 0
