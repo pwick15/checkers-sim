@@ -201,41 +201,64 @@ class MinimaxBot(BotPlayer):
         print(f"Returning {len(paths)} simulation paths")
         return paths
 
-    def get_node_count_by_branch(self):
+    def get_nodes_in_exploration_order(self):
         """
-        Get count of nodes explored per branch (lightweight).
-        Returns: { 'total_nodes': int, 'branches': [{ 'index': int, 'is_top_5': bool, 'nodes': int, 'score': float }] }
+        Get nodes in the order they were explored (depth-first).
+        Mark nodes that are part of the top 5 branches.
+        Returns: { 'nodes': [{ 'is_top_5_branch': bool, 'is_top_5_root': bool, 'branch_index': int }], 'total': int }
         """
         if not self.last_decision_tree:
-            return {'total_nodes': 0, 'branches': []}
+            return {'nodes': [], 'total': 0}
 
-        # Get top-level branches sorted by score
+        # Get top-level branches sorted by score to determine their rank
         top_branches = sorted(self.last_decision_tree.children,
                             key=lambda n: n.score if n.score is not None else float('-inf'),
                             reverse=True)
+        
+        # Create a map from branch node ID to its rank (index)
+        branch_rank_map = {id(branch): i for i, branch in enumerate(top_branches)}
 
-        def count_descendants(node):
-            """Count all descendant nodes"""
-            count = 1  # Count this node
+        all_nodes_with_info = []
+        
+        def collect_all_nodes(node, branch_id):
+            # Only include nodes that were actually visited during the search
+            if node.visit_order is not None:
+                all_nodes_with_info.append({'node': node, 'branch_id': branch_id})
+            
             for child in node.children:
-                count += count_descendants(child)
-            return count
+                collect_all_nodes(child, branch_id)
 
-        branches_info = []
-        total = 0
-        for idx, branch in enumerate(top_branches):
-            node_count = count_descendants(branch)
-            total += node_count
-            branches_info.append({
-                'index': idx,
-                'is_top_5': idx < 5,
-                'nodes': node_count,
-                'score': branch.score,
-                'move': branch.move
+        # Collect all nodes from all branches that were actually explored
+        for branch in self.last_decision_tree.children:
+            if branch.visit_order is not None:
+                collect_all_nodes(branch, id(branch))
+
+        # Sort nodes by the order they were visited during the search
+        all_nodes_with_info.sort(key=lambda x: x['node'].visit_order)
+
+        # Format for frontend
+        frontend_nodes = []
+        for item in all_nodes_with_info:
+            node = item['node']
+            branch_id = item['branch_id']
+            branch_index = branch_rank_map.get(branch_id, -1)
+            
+            is_top_5_branch = branch_index < 5 and branch_index != -1
+
+            frontend_nodes.append({
+                'is_top_5_branch': is_top_5_branch,
+                'is_top_5_root': is_top_5_branch and node.depth == 1,
+                'branch_index': branch_index,
+                'score': node.score,
+                'is_pruned': node.is_pruned
             })
 
-        print(f"Total nodes in tree: {total}")
-        return {'total_nodes': total, 'branches': branches_info}
+        print(f"Returning {len(frontend_nodes)} nodes in exploration order")
+
+        return {
+            'nodes': frontend_nodes,
+            'total': len(frontend_nodes)
+        }
 
     def get_move(self, game):
         """Get the best move using minimax algorithm."""
