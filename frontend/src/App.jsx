@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Board from './Board';
 import GridViz from './GridViz';
-import './App.css'; // empty but good practice
+import './App.css';
 
 function App() {
   const [page, setPage] = useState('landing');
@@ -9,8 +9,8 @@ function App() {
 
   // Game Data
   const [gameId, setGameId] = useState(null);
-  const [board, setBoard] = useState(null); // The REAL board from server
-  const [displayBoard, setDisplayBoard] = useState(null); // The board to show (real or animated)
+  const [board, setBoard] = useState(null); // The REAL board state (committed)
+  const [displayBoard, setDisplayBoard] = useState(null); // The board visualized (may be simulation)
   const [currentTurn, setCurrentTurn] = useState(null);
   const [winner, setWinner] = useState(null);
   const [status, setStatus] = useState('');
@@ -19,33 +19,22 @@ function App() {
   const [selectedPiece, setSelectedPiece] = useState(null);
   const [validMoves, setValidMoves] = useState([]);
 
-  // Simulation Data
-  const [allNodes, setAllNodes] = useState([]);
-  const [simulationPaths, setSimulationPaths] = useState([]);
+  // Analysis & Viz Data
+  const [analysis, setAnalysis] = useState(null); // { nodes, top_moves, total_explored }
+  const [simulationPaths, setSimulationPaths] = useState([]); // Legacy path animation? Or derive from analysis?
+  // We'll keep simulationPaths for the "Live Playback" of the thinking process if possible, 
+  // OR we can just animate through the `analysis.nodes` list linearly.
+  // The user liked the "Branch" playback.
+  // Let's stick to the linear exploration viz for now as it matches "Exploration Order".
 
-  // Animation Visuals
+  // Viz State
   const [isAnimating, setIsAnimating] = useState(false);
-  const [branchInfo, setBranchInfo] = useState('');
-  const [scoreInfo, setScoreInfo] = useState('');
   const [exploredCount, setExploredCount] = useState(0);
-  const [top5Nodes, setTop5Nodes] = useState(new Set());
-  const [speed, setSpeed] = useState(1);
+  const [hoveredNode, setHoveredNode] = useState(null); // Inspecting
+  const [speed, setSpeed] = useState(2); // Higher default
 
-  // Refs for animation loop state (mutable)
-  const animationState = useRef({
-    currentBranchIndex: 0,
-    currentMove: 0,
-    currentNodeIndex: 0,
-    phase: 'idle',
-    simulationBoard: null,
-    lastUpdateTime: 0,
-    moveDelay: 800,
-    fastMoveDelay: 50,
-    scoreDelay: 1500,
-  });
   const requestRef = useRef();
 
-  // --- API HELPER ---
   const fetchState = async (id) => {
     try {
       const res = await fetch(`/api/game/${id}`);
@@ -66,7 +55,6 @@ function App() {
     }
   };
 
-  // --- GAME LOGIC ---
   const handleStartGame = async () => {
     try {
       const res = await fetch('/api/game', {
@@ -78,28 +66,26 @@ function App() {
       setGameId(data.game_id);
       setPage('game');
       setBoard(null);
-      setWinner(null);
-      setAllNodes([]);
-      setSimulationPaths([]);
+      setDisplayBoard(null);
+      setAnalysis(null);
       setExploredCount(0);
-      setTop5Nodes(new Set());
       setStatus("Initializing...");
-
       await fetchState(data.game_id);
     } catch (e) {
       console.error(e);
     }
   };
 
+  // --- Move Logic ---
   const handleSquareClick = async (row, col) => {
+    // Logic same as before...
     if (isAnimating || winner || currentTurn !== 'red') return;
 
-    // Attempt move?
     const move = validMoves.find(m => m.row === row && m.col === col);
     if (selectedPiece && move) {
-      // Execute Move
       try {
-        const res = await fetch(`/api/game/${gameId}/move`, {
+        // PLAY MOVE
+        await fetch(`/api/game/${gameId}/move`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -107,32 +93,27 @@ function App() {
             end_pos: [row, col]
           })
         });
-        if (!res.ok) throw new Error("Invalid Move");
 
         await fetchState(gameId);
         setSelectedPiece(null);
         setValidMoves([]);
 
-        // Trigger Bot
+        // Trigger AI
         setTimeout(triggerBot, 500);
+
       } catch (e) {
-        setStatus("Error: " + e.message);
+        console.error(e);
       }
       return;
     }
 
-    // Select Piece
+    // Select
     const piece = board[row][col];
     if (piece && piece.color === 'red') {
       setSelectedPiece({ row, col });
-      // Fetch moves
-      try {
-        const res = await fetch(`/api/game/${gameId}/moves?row=${row}&col=${col}`);
-        const data = await res.json();
-        setValidMoves(data.moves);
-      } catch (e) {
-        console.error(e);
-      }
+      const res = await fetch(`/api/game/${gameId}/moves?row=${row}&col=${col}`);
+      const data = await res.json();
+      setValidMoves(data.moves);
     } else {
       setSelectedPiece(null);
       setValidMoves([]);
@@ -140,21 +121,16 @@ function App() {
   };
 
   const triggerBot = async () => {
-    setStatus("Bot is thinking...");
+    setStatus("Reviewing options...");
     try {
       const res = await fetch(`/api/game/${gameId}/bot-move`, { method: 'POST' });
       const data = await res.json();
 
-      // Setup Animation
-      const paths = data.simulation_paths || [];
-      const nodes = (data.node_stats || {}).nodes || [];
-
-      if (nodes.length > 0) {
-        setAllNodes(nodes);
-        setSimulationPaths(paths);
-        startAnimation(nodes, paths, data.board); // Pass final board to verify match later? No, use local sim.
+      if (data.analysis && data.analysis.nodes.length > 0) {
+        setAnalysis(data.analysis);
+        startAnimation(data.analysis.nodes.length);
       } else {
-        // No animation, just update
+        // Fallback
         await fetchState(gameId);
       }
     } catch (e) {
@@ -162,171 +138,54 @@ function App() {
     }
   };
 
-  // --- ANIMATION LOGIC ---
-  const startAnimation = (nodes, paths) => {
-    // Sort paths
-    paths.sort((a, b) => a.branch_index - b.branch_index);
-
+  const startAnimation = (total) => {
     setIsAnimating(true);
-    setTop5Nodes(new Set());
     setExploredCount(0);
 
-    // Init Animation State
-    animationState.current = {
-      ...animationState.current,
-      currentBranchIndex: -1,
-      currentNodeIndex: 0,
-      phase: 'switching_branch',
-      simulationBoard: JSON.parse(JSON.stringify(board)), // Start from current board
-      realBoard: JSON.parse(JSON.stringify(board)),
-      lastUpdateTime: performance.now(),
+    let current = 0;
+    const animate = () => {
+      // Speed calc
+      const step = Math.ceil(total / 200 * speed); // Scale with size
+      current += step;
+      if (current >= total) {
+        current = total;
+        setIsAnimating(false);
+        fetchState(gameId);
+      }
+      setExploredCount(current);
+
+      if (current < total) {
+        requestRef.current = requestAnimationFrame(animate);
+      }
     };
 
-    setStatus(`AI is exploring ${nodes.length} positions...`);
     requestRef.current = requestAnimationFrame(animate);
   };
 
-  const animate = (time) => {
-    if (!animationState.current) return;
-    const state = animationState.current;
-
-    const elapsed = time - state.lastUpdateTime;
-    let delay = 0;
-
-    // Phase Logic
-    if (state.phase === 'switching_branch') {
-      const node = allNodes[state.currentNodeIndex];
-      if (!node) {
-        finishAnimation();
-        return;
-      }
-
-      state.currentBranchIndex = node.branch_index;
-      state.phase = 'branch_setup';
-      // We'll process setup immediately in next frame or fallthrough? 
-      // Let's loop again immediately
+  const handleUndo = async () => {
+    await fetch(`/api/game/${gameId}/undo`, { method: 'POST' });
+    // Logic to double undo if vs bot... matches original code
+    const data = await fetchState(gameId);
+    if (data.current_turn === 'black') {
+      await fetch(`/api/game/${gameId}/undo`, { method: 'POST' });
+      await fetchState(gameId);
     }
-
-    if (state.phase === 'branch_setup') {
-      const node = allNodes[state.currentNodeIndex];
-      const branchData = simulationPaths.find(p => p.branch_index === state.currentBranchIndex);
-
-      setBranchInfo(`Exploring Branch ${state.currentBranchIndex + 1} / ${simulationPaths.length}`);
-
-      if (node.is_top_5 && branchData) {
-        state.phase = 'animating';
-        state.currentMove = 0;
-        state.simulationBoard = JSON.parse(JSON.stringify(state.realBoard));
-        setDisplayBoard(state.simulationBoard);
-      } else {
-        state.phase = 'fast_forward';
-      }
-      state.lastUpdateTime = time;
-    }
-
-    else if (state.phase === 'animating') {
-      delay = state.moveDelay / speed;
-      if (elapsed >= delay) {
-        state.lastUpdateTime = time;
-        const branchData = simulationPaths.find(p => p.branch_index === state.currentBranchIndex);
-
-        if (branchData && state.currentMove < branchData.moves.length) {
-          const move = branchData.moves[state.currentMove];
-          // Apply move locally
-          applyMoveToBoard(state.simulationBoard, move.from, move.to);
-          // Trigger re-render of board
-          setDisplayBoard([...state.simulationBoard]);
-
-          // Color grid node
-          if (state.currentNodeIndex < allNodes.length) {
-            setTop5Nodes(prev => new Set(prev).add(state.currentNodeIndex));
-            state.currentNodeIndex++;
-            setExploredCount(state.currentNodeIndex);
-          }
-
-          state.currentMove++;
-        } else {
-          state.phase = 'scoring';
-        }
-      }
-    }
-
-    else if (state.phase === 'scoring') {
-      delay = state.scoreDelay / speed;
-      const branchData = simulationPaths.find(p => p.branch_index === state.currentBranchIndex);
-      if (branchData) {
-        setScoreInfo(`Branch Score: ${branchData.final_score}`);
-      }
-
-      if (elapsed >= delay) {
-        state.lastUpdateTime = time;
-        setScoreInfo('');
-        state.phase = 'fast_forward';
-      }
-    }
-
-    else if (state.phase === 'fast_forward') {
-      delay = state.fastMoveDelay / speed;
-      if (elapsed >= delay) {
-        state.lastUpdateTime = time;
-
-        if (state.currentNodeIndex >= allNodes.length) {
-          finishAnimation();
-          return;
-        }
-
-        const currentBranchIdx = allNodes[state.currentNodeIndex].branch_index;
-
-        state.currentNodeIndex++;
-        setExploredCount(state.currentNodeIndex);
-
-        // If next node is different branch, switch
-        if (state.currentNodeIndex < allNodes.length) {
-          if (allNodes[state.currentNodeIndex].branch_index !== currentBranchIdx) {
-            state.phase = 'switching_branch';
-          }
-        } else {
-          finishAnimation();
-          return;
-        }
-      }
-    }
-
-    requestRef.current = requestAnimationFrame(animate);
+    setAnalysis(null);
+    setExploredCount(0);
   };
 
-  const finishAnimation = () => {
-    cancelAnimationFrame(requestRef.current);
-    setIsAnimating(false);
-    setBranchInfo('Simulation Complete');
-    setScoreInfo('');
-    // Update to final state
-    fetchState(gameId);
-  };
-
-  // Helpers
-  function applyMoveToBoard(boardState, fromPos, toPos) {
-    const [fromRow, fromCol] = fromPos;
-    const [toRow, toCol] = toPos;
-    const piece = boardState[fromRow][fromCol];
-    if (!piece) return;
-
-    boardState[toRow][toCol] = { ...piece };
-    boardState[fromRow][fromCol] = null;
-
-    if (Math.abs(toRow - fromRow) === 2) {
-      const capturedRow = (fromRow + toRow) / 2;
-      const capturedCol = (fromCol + toCol) / 2;
-      boardState[capturedRow][capturedCol] = null;
-    }
-
-    if ((piece.color === 'red' && toRow === 0) || (piece.color === 'black' && toRow === 7)) {
-      boardState[toRow][toCol].is_king = true;
-    }
-  }
+  // --- Inspector ---
+  // When hovering a top move or grid node, show a preview?
+  // NOTE: Implementing preview requires replaying moves on the board.
+  // We can do this by taking the current 'board' and applying 'hoveredNode.move' locally?
+  // But grid nodes are usually deeper in the tree. We need the full path.
+  // Backend provided parent_id, so we can trace back if we had an index.
+  // For now, let's keep it simple: Show details in tooltip.
 
   return (
     <div className="app-container">
+
+      {/* LANDING PAGE reuse existing HTML structure or Component if desired */}
       {page === 'landing' && (
         <div className="landing-page page">
           <h1>Checkers AI Simulator</h1>
@@ -343,48 +202,91 @@ function App() {
             </div>
           </div>
 
-          <button className="play-button" onClick={handleStartGame}>Start Game</button>
+          <button className="play-button" onClick={handleStartGame} style={{ marginTop: 30 }}>Start Game</button>
         </div>
       )}
 
       {page === 'game' && (
-        <div className="game-page page">
-          <div id="board-container">
+        <div className="game-page">
+          {/* LEFT: BOARD */}
+          <div id="board-area">
+            <div id="board-header">
+              <button className="control-btn" onClick={() => setPage('landing')}>Exit</button>
+              <div style={{ fontSize: 20, fontWeight: 'bold', color: currentTurn === 'red' ? '#e57373' : '#90caf9' }}>{status}</div>
+            </div>
+
             <Board
-              board={displayBoard}
+              board={displayBoard || board}
               validMoves={validMoves}
               selectedPiece={selectedPiece}
               onSquareClick={handleSquareClick}
             />
+
+            <div className="controls-bar" style={{ width: 480, marginTop: 20 }}>
+              <button className="control-btn undo-btn" onClick={handleUndo}>Undo Last Move</button>
+            </div>
           </div>
 
-          <div id="sidebar">
-            <div className="panel">
-              <div className="top-bar">
-                <button onClick={() => setPage('landing')}>← New Game</button>
-                <div className="algorithm-badge">
-                  <strong>{algo === 'minimax' ? 'Minimax' : 'Alpha-Beta'}</strong>
+          {/* RIGHT: ANALYSIS */}
+          <div id="analysis-panel">
+
+            {/* TOP MOVES CARD */}
+            {analysis && analysis.top_moves.length > 0 && (
+              <div className="analysis-card">
+                <div className="analysis-header">Top Candidates</div>
+                <div className="top-moves-list">
+                  {analysis.top_moves.map((m, i) => (
+                    <div key={i} className={`top-move-item rank-${i + 1}`}>
+                      <div className="move-info">
+                        <div className="move-notation">Move {i + 1}</div>
+                        <div className="move-coords">({m.from_pos[0]},{m.from_pos[1]}) → ({m.to_pos[0]},{m.to_pos[1]})</div>
+                      </div>
+                      <div className={`move-score ${m.score > 0 ? 'positive' : 'negative'}`}>
+                        {m.score > 0 ? '+' : ''}{m.score}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div id="status">{status}</div>
+            )}
+
+            {/* SEARCH GRID CARD */}
+            <div className="analysis-card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div className="analysis-header">
+                <span>Search Space ({exploredCount} / {analysis?.total_explored || 0})</span>
+              </div>
+
+              <div className="grid-container">
+                <GridViz
+                  analysis={analysis}
+                  exploredCount={exploredCount}
+                  onNodeHover={setHoveredNode}
+                />
+
+                {/* LEGEND */}
+                <div className="legend">
+                  <div className="legend-item"><div className="dot explored"></div> Explored</div>
+                  <div className="legend-item"><div className="dot pruned"></div> Pruned</div>
+                  <div className="legend-item"><div className="dot top-path"></div> Best Paths</div>
+                </div>
+
+                {/* TOOLTIP OVERLAY */}
+                {hoveredNode && (
+                  <div className="inspector-tooltip" style={{ bottom: 10, left: 10 }}>
+                    <div className="inspector-row"><span className="label">Score</span> <span className="value">{hoveredNode.score}</span></div>
+                    <div className="inspector-row"><span className="label">Depth</span> <span className="value">{hoveredNode.depth}</span></div>
+                    <div className="inspector-row"><span className="label">Type</span> <span className="value">{hoveredNode.type.toUpperCase()}</span></div>
+                    {hoveredNode.is_pruned && <div style={{ color: '#ff5252', marginTop: 4 }}>PRUNED (Cutoff)</div>}
+                  </div>
+                )}
+              </div>
+
+              <div className="speed-control">
+                <label>Viz Speed</label>
+                <input type="range" min="1" max="10" value={speed} onChange={e => setSpeed(Number(e.target.value))} />
+              </div>
             </div>
 
-            <div className="panel">
-              <div id="branch-info">{branchInfo}</div>
-              <GridViz
-                allNodes={allNodes}
-                exploredCount={exploredCount}
-                top5Nodes={top5Nodes}
-              />
-              <div className="speed-control">
-                <label>Speed:</label>
-                <input type="range" min="0.5" max="5" step="0.5" value={speed} onChange={e => setSpeed(Number(e.target.value))} />
-                <span>{speed}x</span>
-              </div>
-              <div id="score-display" className={scoreInfo ? 'visible' : ''}>
-                {scoreInfo}
-              </div>
-            </div>
           </div>
         </div>
       )}

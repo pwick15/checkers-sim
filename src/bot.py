@@ -201,66 +201,109 @@ class MinimaxBot(BotPlayer):
         print(f"Returning {len(paths)} simulation paths")
         return paths
 
-    def get_nodes_in_exploration_order(self):
+    def get_analysis_data(self):
         """
-        Get nodes in the order they were explored (depth-first).
-        Mark nodes that are part of the top 5 branches.
-        Returns: { 'nodes': [{ 'is_top_5_branch': bool, 'is_top_5_root': bool, 'branch_index': int }], 'total': int }
+        Get comprehensive data for frontend visualization.
+        Returns: {
+            'nodes': List of flat node objects for the grid,
+            'top_moves': List of top 3 candidate moves with full details,
+            'total_explored': int
+        }
         """
         if not self.last_decision_tree:
-            return {'nodes': [], 'total': 0}
+            return {'nodes': [], 'top_moves': [], 'total_explored': 0}
 
-        # Get top-level branches and sort them by score
-        top_branches = sorted(self.last_decision_tree.children,
-                            key=lambda n: n.score if n.score is not None else float('-inf'),
-                            reverse=True)
+        # 1. Identify Top Moves
+        # Sort children by score descending
+        children = self.last_decision_tree.children
+        sorted_children = sorted(children, 
+                               key=lambda n: n.score if n.score is not None else float('-inf'), 
+                               reverse=True)
         
-        # Add rank directly to each branch node object
-        for i, branch in enumerate(top_branches):
-            branch.rank = i
+        top_moves = []
+        for i, child in enumerate(sorted_children[:3]):
+             # We need to reconstruct the move notation and perhaps the board state result?
+             # For now, let's just send the move coordinates and score.
+             # The frontend can deduce notation.
+             top_moves.append({
+                 'rank': i + 1,
+                 'score': child.score,
+                 'from_pos': child.move[0],
+                 'to_pos': child.move[1],
+                 'visit_order': child.visit_order
+             })
+             child.rank = i # Tag for grid coloring
 
-        all_nodes_with_info = []
-        def collect_all_nodes(node, branch_root):
-            if node.visit_order is not None:
-                all_nodes_with_info.append({'node': node, 'branch_root': branch_root})
-            for child in node.children:
-                collect_all_nodes(child, branch_root)
-
-        # self.last_decision_tree.children is the original unsorted list
-        for branch in self.last_decision_tree.children:
-            if branch.visit_order is not None:
-                collect_all_nodes(branch, branch) # Pass the branch root itself
-
-        all_nodes_with_info.sort(key=lambda x: x['node'].visit_order)
-
-        frontend_nodes = []
-        for item in all_nodes_with_info:
-            node = item['node']
-            branch_root = item['branch_root']
+        # 2. Flatten Tree for Grid
+        # We need a flat list sorted by visit_order.
+        # We also want to link parents for replay.
+        
+        flat_nodes = []
+        
+        # Helper to assign IDs and collect nodes
+        # ID strategy: use visit_order as ID since it's unique and 0-indexed almost? 
+        # Actually visit_order might have gaps if we skip things? 
+        # MinimaxBot increments visit_counter for every node.
+        
+        def walk(node, parent_visit_order, branch_rank):
+            # Determined rank of this branch (derived from root child)
+            current_rank = branch_rank
+            if node.depth == 1:
+                current_rank = getattr(node, 'rank', -1)
             
-            # The rank is now an attribute of the branch root object
-            branch_index = getattr(branch_root, 'rank', -1)
-            
-            is_top_5_branch = branch_index < 5 and branch_index != -1
-
-            frontend_nodes.append({
-                'is_top_5_branch': is_top_5_branch,
-                'is_top_5_root': is_top_5_branch and node.depth == 1,
-                'branch_index': branch_index,
+            node_data = {
+                'id': node.visit_order,
+                'parent_id': parent_visit_order,
+                'depth': node.depth,
                 'score': node.score,
-                'is_pruned': node.is_pruned
-            })
-        
-        # Clean up the rank attribute
-        for branch in self.last_decision_tree.children:
-            if hasattr(branch, 'rank'):
-                del branch.rank
+                'is_pruned': node.is_pruned,
+                'type': 'max' if node.depth % 2 != 0 else 'min', # Root is depth 0 (max's turn to choose), Depth 1 is resulting state (min's turn)
+                # Wait, depth 0 is Us (Max). Children are Depth 1.
+                # Depth 1 nodes are the states AFTER we moved. So at Depth 1, it is Opponent's turn (Min).
+                # So Depth 1 is a MIN node? 
+                # Standard Minimax:
+                # Root (Max) -> Choose move -> Child (Min node) -> Choose move -> Grandchild (Max node)
+                # So Depth 0 = Max node, Depth 1 = Min node, Depth 2 = Max node.
+                # 'type' field should indicate who is choosing from this state.
+                # However, usually we visualize the node as "The move that got us here".
+                # Let's just stick to depth.
+                
+                'move': {
+                    'from': node.move[0],
+                    'to': node.move[1]
+                } if node.move else None,
+                
+                'is_top_move': current_rank != -1 and current_rank < 3,
+                'branch_rank': current_rank
+            }
+            
+            flat_nodes.append(node_data)
+            
+            # Sort children by visit_order to ensure time linearity in recursive structure?
+            # Actually children might be visited in any order. The visit_order field is truth.
+            
+            for child in node.children:
+                walk(child, node.visit_order, current_rank)
 
-        print(f"Returning {len(frontend_nodes)} nodes in exploration order")
+        # Start walk from children of root (we don't visualize root as a grid dot usually, or maybe we do?)
+        # The current visualizer showed root? No, usually shows branches.
+        # Let's include root children and below.
+        for child in self.last_decision_tree.children:
+            walk(child, -1, -1) # Root's visit_order is 0, but let's treat top-level as separate roots for grid if we want? 
+            # Actually, let's just walk everything.
+        
+        # Sort entirely by visit_order to guarantee the timeline is correct
+        flat_nodes.sort(key=lambda x: x['id'])
+        
+        # Cleanup rank
+        for child in children:
+            if hasattr(child, 'rank'):
+                del child.rank
 
         return {
-            'nodes': frontend_nodes,
-            'total': len(frontend_nodes)
+            'nodes': flat_nodes,
+            'top_moves': top_moves,
+            'total_explored': len(flat_nodes)
         }
 
     def get_move(self, game):

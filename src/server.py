@@ -26,6 +26,8 @@ class GameConfig(BaseModel):
     algorithm: str = "alphabeta"  # "minimax" or "alphabeta"
     depth: int = 3
 
+import copy
+
 @app.post("/api/game")
 async def create_game(config: GameConfig = None):
     """
@@ -47,7 +49,8 @@ async def create_game(config: GameConfig = None):
     games[game_id] = {
         "game": Game(silent=True),
         "algorithm": config.algorithm,
-        "depth": config.depth
+        "depth": config.depth,
+        "history": [] 
     }
     return {
         "game_id": game_id,
@@ -88,9 +91,14 @@ async def play_move(game_id: str, move: Move):
     if game.is_over():
         raise HTTPException(status_code=400, detail="Game is over")
 
+    # Save state for undo
+    game_data["history"].append(copy.deepcopy(game))
+
     success = game.play_move(tuple(move.start_pos), tuple(move.end_pos))
 
     if not success:
+        # Revert history if move failed (though play_move shouldn't mutate if false, better safe)
+        game_data["history"].pop() 
         raise HTTPException(status_code=400, detail="Invalid move")
 
     return {
@@ -135,9 +143,8 @@ async def get_bot_move(game_id: str):
 
         # Extract simulation paths for animation (first 5 branches for board display)
         if hasattr(bot, 'extract_simulation_paths'):
-            simulation_paths = bot.extract_simulation_paths()  # Get all branches
-            print(f"Server: Extracted {len(simulation_paths)} paths from bot")
-            # Add notation to each move for display
+            simulation_paths = bot.extract_simulation_paths()
+            # Add notation
             for path in simulation_paths:
                 for move_data in path['moves']:
                     from_pos = move_data['from']
@@ -146,15 +153,15 @@ async def get_bot_move(game_id: str):
                         'from': pos_to_notation(from_pos[0], from_pos[1]),
                         'to': pos_to_notation(to_pos[0], to_pos[1])
                     }
-            print(f"Server: About to return {len(simulation_paths)} paths in response")
 
-        # Get nodes in exploration order for grid visualization
-        node_stats = {}
-        if hasattr(bot, 'get_nodes_in_exploration_order'):
-            node_stats = bot.get_nodes_in_exploration_order()
-            print(f"Server: Tree has {node_stats.get('total', 0)} total nodes in depth-first order")
+        # Get analysis data for frontend
+        analysis_data = {}
+        if hasattr(bot, 'get_analysis_data'):
+            analysis_data = bot.get_analysis_data()
 
     if move:
+        # Save state for undo
+        game_data["history"].append(copy.deepcopy(game))
         game.play_move(move[0], move[1])
 
     return {
@@ -165,9 +172,34 @@ async def get_bot_move(game_id: str):
         "board": serialize_board(game.board),
         "tree": tree_data,
         "simulation_paths": simulation_paths,
-        "node_stats": node_stats,
+        "analysis": analysis_data,
         "algorithm": algorithm,
         "nodes_explored": getattr(bot, 'nodes_explored', 0)
+    }
+
+@app.post("/api/game/{game_id}/undo")
+async def undo_move(game_id: str):
+    """
+    Undoes the last move (restores previous game state).
+    """
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    game_data = games[game_id]
+    if not game_data.get("history"):
+        raise HTTPException(status_code=400, detail="No history to undo")
+        
+    # Pop last state
+    previous_game_state = game_data["history"].pop()
+    game_data["game"] = previous_game_state
+    
+    game = game_data["game"]
+    
+    return {
+        "message": "Undo successful",
+        "current_turn": game.current_turn,
+        "winner": game.winner,
+        "board": serialize_board(game.board)
     }
 
 @app.get("/api/game/{game_id}/moves")
@@ -190,20 +222,13 @@ async def get_valid_moves(game_id: str, row: int, col: int):
 
     valid_moves = game.board.get_valid_moves(piece, row, col)
     
-    # Format as list of {"row": r, "col": c}
-    destinations = []
-    # valid_moves is a dict { (row, col): captured_pieces }
-    # but we also need to respect forced jumps if any exist on the board? 
-    # The Game class handles turn logic, but get_valid_moves is local to piece.
-    # Ideally we should use a method on Game that enforces rule of capture.
-    # For now, let's return all physical moves for that piece.
+    # Enforce capture rule just like Game.play_move does
+    # This ensures the frontend only shows moves that are actually legal
+    capture_moves = {m: c for m, c in valid_moves.items() if c is not None}
     
-    # Actually, to be correct, we should filter by what Game would allow.
-    # But Game.play_move checks validity.
-    # Let's just return the moves the board says are valid for now.
+    allowed = capture_moves if capture_moves else valid_moves
     
-    for (r, c), _ in valid_moves.items():
-        destinations.append({"row": r, "col": c})
+    destinations = [{"row": r, "col": c} for (r, c) in allowed.keys()]
 
     return {"moves": destinations}
 

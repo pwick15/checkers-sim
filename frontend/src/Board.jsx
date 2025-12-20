@@ -85,12 +85,22 @@ export default function Board({ board, validMoves = [], selectedPiece, onSquareC
 
     const handleClick = (e) => {
         if (!onSquareClick) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+
+        // Handle scaling (visual vs intrinsic size)
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
         const row = Math.floor(y / SQUARE_SIZE);
         const col = Math.floor(x / SQUARE_SIZE);
-        onSquareClick(row, col);
+
+        if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+            onSquareClick(row, col);
+        }
     };
 
     return (
@@ -100,7 +110,7 @@ export default function Board({ board, validMoves = [], selectedPiece, onSquareC
             width={480}
             height={480}
             onClick={handleClick}
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: 'pointer', touchAction: 'none' }}
         />
     );
 }
