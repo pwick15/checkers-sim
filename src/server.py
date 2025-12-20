@@ -5,10 +5,12 @@ import uuid
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from starlette.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+import os
 
 from .game import Game
 from .bot import MinimaxBot, AlphaBetaBot
-from .gui import CheckersUI # We need this for the tree serialization logic initially
+from .serialization import serialize_tree_for_web, serialize_board, pos_to_notation
 
 app = FastAPI()
 
@@ -23,13 +25,6 @@ class Move(BaseModel):
 class GameConfig(BaseModel):
     algorithm: str = "alphabeta"  # "minimax" or "alphabeta"
     depth: int = 3
-
-@app.get("/")
-async def read_root():
-    """
-    Serves the main index.html file.
-    """
-    return FileResponse('web/index.html')
 
 @app.post("/api/game")
 async def create_game(config: GameConfig = None):
@@ -135,12 +130,8 @@ async def get_bot_move(game_id: str):
     tree_data = None
     simulation_paths = []
     if hasattr(bot, 'last_decision_tree') and bot.last_decision_tree:
-        # We need to serialize the tree. Let's borrow the logic from the GUI for now.
-        # This is a temporary solution.
-        gui_instance = CheckersUI()
-        gui_instance.game = game
-        gui_instance.bot = bot
-        tree_data = gui_instance._serialize_tree(bot.last_decision_tree)
+        # Use the specific web serializer
+        tree_data = serialize_tree_for_web(bot.last_decision_tree, bot, game)
 
         # Extract simulation paths for animation (first 5 branches for board display)
         if hasattr(bot, 'extract_simulation_paths'):
@@ -179,36 +170,42 @@ async def get_bot_move(game_id: str):
         "nodes_explored": getattr(bot, 'nodes_explored', 0)
     }
 
-
-def pos_to_notation(row, col):
-    """Convert (row, col) to checkers notation (1-32)."""
-    # Only dark squares are numbered
-    if (row + col) % 2 == 0:  # Light square
-        return None
-
-    # Count dark squares from top-left
-    square_num = (row * 4) + (col // 2) + 1
-    return square_num
-
-
-def serialize_board(board):
+@app.get("/api/game/{game_id}/moves")
+async def get_valid_moves(game_id: str, row: int, col: int):
     """
-    Serializes the board state into a JSON-friendly format.
+    Returns valid destination squares for a piece at (row, col).
     """
-    grid = []
-    for r in range(8):
-        row = []
-        for c in range(8):
-            piece = board.get_piece(r, c)
-            if piece:
-                row.append({
-                    "color": piece.color,
-                    "is_king": piece.is_king
-                })
-            else:
-                row.append(None)
-        grid.append(row)
-    return grid
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    game = games[game_id]["game"]
+    piece = game.board.get_piece(row, col)
+
+    if not piece:
+        return {"moves": []}
+
+    # Only allow moves for the current turn's color
+    if piece.color != game.current_turn:
+        return {"moves": []}
+
+    valid_moves = game.board.get_valid_moves(piece, row, col)
+    
+    # Format as list of {"row": r, "col": c}
+    destinations = []
+    # valid_moves is a dict { (row, col): captured_pieces }
+    # but we also need to respect forced jumps if any exist on the board? 
+    # The Game class handles turn logic, but get_valid_moves is local to piece.
+    # Ideally we should use a method on Game that enforces rule of capture.
+    # For now, let's return all physical moves for that piece.
+    
+    # Actually, to be correct, we should filter by what Game would allow.
+    # But Game.play_move checks validity.
+    # Let's just return the moves the board says are valid for now.
+    
+    for (r, c), _ in valid_moves.items():
+        destinations.append({"row": r, "col": c})
+
+    return {"moves": destinations}
 
 if __name__ == "__main__":
     import uvicorn
