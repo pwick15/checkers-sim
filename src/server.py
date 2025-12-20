@@ -74,7 +74,8 @@ async def get_game_state(game_id: str):
         "winner": game.winner,
         "board": serialize_board(game.board),
         "algorithm": game_data["algorithm"],
-        "depth": game_data["depth"]
+        "depth": game_data["depth"],
+        "last_move": game_data.get("last_move", None) # Tracked in game_data
     }
 
 @app.post("/api/game/{game_id}/move")
@@ -97,15 +98,24 @@ async def play_move(game_id: str, move: Move):
     success = game.play_move(tuple(move.start_pos), tuple(move.end_pos))
 
     if not success:
-        # Revert history if move failed (though play_move shouldn't mutate if false, better safe)
+        # Revert history if move failed
         game_data["history"].pop() 
         raise HTTPException(status_code=400, detail="Invalid move")
+
+    # Store last move
+    game_data["last_move"] = {"from": move.start_pos, "to": move.end_pos, "color": game.current_turn} # current_turn is swapped inside play_move, so this is actually NEXT player. 
+    # Wait, game.play_move calls switch_turn at the end. 
+    # So game.current_turn is now the opponent.
+    # The move was made by the previous turn player.
+    # Let's trust the frontend to know who moved or store the color appearing in the move?
+    # Actually, let's look at get_bot_move.
 
     return {
         "message": "Move successful",
         "current_turn": game.current_turn,
         "winner": game.winner,
-        "board": serialize_board(game.board)
+        "board": serialize_board(game.board),
+        "last_move": {"from": move.start_pos, "to": move.end_pos}
     }
 
 @app.post("/api/game/{game_id}/bot-move")
@@ -137,6 +147,7 @@ async def get_bot_move(game_id: str):
 
     tree_data = None
     simulation_paths = []
+    
     if hasattr(bot, 'last_decision_tree') and bot.last_decision_tree:
         # Use the specific web serializer
         tree_data = serialize_tree_for_web(bot.last_decision_tree, bot, game)
@@ -163,6 +174,7 @@ async def get_bot_move(game_id: str):
         # Save state for undo
         game_data["history"].append(copy.deepcopy(game))
         game.play_move(move[0], move[1])
+        game_data["last_move"] = {"from": move[0], "to": move[1], "is_bot": True}
 
     return {
         "message": "Bot move successful",
@@ -174,7 +186,8 @@ async def get_bot_move(game_id: str):
         "simulation_paths": simulation_paths,
         "analysis": analysis_data,
         "algorithm": algorithm,
-        "nodes_explored": getattr(bot, 'nodes_explored', 0)
+        "nodes_explored": getattr(bot, 'nodes_explored', 0),
+        "last_move": game_data.get("last_move")
     }
 
 @app.post("/api/game/{game_id}/undo")

@@ -1,3 +1,47 @@
+/* Popup Menu */
+.popup-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: #252b3b;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 4px;
+    display: none;
+    z-index: 200;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.popup-menu.show {
+    display: block;
+    animation: fadeIn 0.2s ease;
+}
+
+.popup-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    color: #e0e0e0;
+    font-size: 13px;
+    border-radius: 4px;
+}
+
+.popup-item:hover {
+    background: #333;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Rest of App.css content appended below to ensure no overwrite if I did it wrong */
 /* Layout */
 .app-container {
     display: flex;
@@ -11,6 +55,69 @@
 .landing-page {
     /* Inherits centered flex from index.css logic or define here */
     width: 100%;
+}
+
+.landing-page.page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.algorithm-selector {
+    display: flex;
+    gap: 20px;
+    margin-top: 40px;
+}
+
+.algorithm-card {
+    background: #1e2330;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 24px;
+    width: 280px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.algorithm-card:hover {
+    transform: translateY(-4px);
+    border-color: #4a5a75;
+}
+
+.algorithm-card.selected {
+    border-color: #fbc02d;
+    background: rgba(251, 192, 45, 0.05);
+}
+
+.algorithm-card h3 {
+    margin-top: 0;
+    color: #fbc02d;
+}
+
+.algorithm-card p {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #999;
+}
+
+.play-button {
+    padding: 14px 40px;
+    font-size: 18px;
+    font-weight: bold;
+    background: #fbc02d;
+    color: #000;
+    border: none;
+    border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(251, 192, 45, 0.3);
+    transition: all 0.2s;
+}
+
+.play-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(251, 192, 45, 0.4);
 }
 
 .game-page {
@@ -137,8 +244,7 @@
 
 #grid-canvas {
     width: 100%;
-    height: 300px;
-    /* Fixed height for scrollable grid? Or auto? Let's fix for now */
+    /* Height handled by component style */
     cursor: crosshair;
 }
 
@@ -225,6 +331,10 @@
 
 .control-btn:hover {
     background: #2a303e;
+}
+
+.control-btn.small:hover {
+    background: #333;
 }
 
 .undo-btn {

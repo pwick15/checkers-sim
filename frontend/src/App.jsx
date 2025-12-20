@@ -32,6 +32,10 @@ function App() {
   const [exploredCount, setExploredCount] = useState(0);
   const [hoveredNode, setHoveredNode] = useState(null); // Inspecting
   const [speed, setSpeed] = useState(2); // Higher default
+  const speedRef = useRef(speed);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+
+  const [lastMove, setLastMove] = useState(null); // NEW: Track last move
 
   const requestRef = useRef();
 
@@ -43,6 +47,7 @@ function App() {
       setDisplayBoard(data.board);
       setCurrentTurn(data.current_turn);
       setWinner(data.winner);
+      setLastMove(data.last_move); // NEW
 
       if (data.winner) {
         setStatus(`Game Over! ${data.winner.toUpperCase()} wins!`);
@@ -144,8 +149,9 @@ function App() {
 
     let current = 0;
     const animate = () => {
-      // Speed calc
-      const step = Math.ceil(total / 200 * speed); // Scale with size
+      // Speed calc from REF
+      const s = speedRef.current || speed; // fallback
+      const step = Math.ceil(total / 200 * s);
       current += step;
       if (current >= total) {
         current = total;
@@ -220,6 +226,7 @@ function App() {
               validMoves={validMoves}
               selectedPiece={selectedPiece}
               onSquareClick={handleSquareClick}
+              lastMove={lastMove}
             />
 
             <div className="controls-bar" style={{ width: 480, marginTop: 20 }}>
@@ -251,12 +258,44 @@ function App() {
             )}
 
             {/* SEARCH GRID CARD */}
-            <div className="analysis-card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <div className="analysis-header">
+            <div className="analysis-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+              <div className="analysis-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Search Space ({exploredCount} / {analysis?.total_explored || 0})</span>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {/* SPEED CONTROL */}
+                  <div className="speed-dropdown" style={{ position: 'relative' }}>
+                    <button
+                      className="control-btn small"
+                      style={{ padding: '4px 12px', fontSize: 12 }}
+                      onClick={() => document.getElementById('speed-popup').classList.toggle('show')}
+                    >
+                      Speed: {speed}x
+                    </button>
+                    <div id="speed-popup" className="popup-menu">
+                      {[1, 2, 5, 10].map(s => (
+                        <div key={s} className="popup-item" onClick={() => {
+                          setSpeed(s);
+                          document.getElementById('speed-popup').classList.remove('show');
+                        }}>
+                          {s}x Speed
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SHOW TREE BUTTON */}
+                  <button
+                    className="control-btn small"
+                    style={{ padding: '4px 12px', fontSize: 12 }}
+                    onClick={() => window.alert("Tree View: Coming Soon (Detailed Structure)")}
+                  >
+                    Show Tree
+                  </button>
+                </div>
               </div>
 
-              <div className="grid-container">
+              <div className="grid-container" style={{ flex: 1, minHeight: 0 }}>
                 <GridViz
                   analysis={analysis}
                   exploredCount={exploredCount}
@@ -267,7 +306,9 @@ function App() {
                 <div className="legend">
                   <div className="legend-item"><div className="dot explored"></div> Explored</div>
                   <div className="legend-item"><div className="dot pruned"></div> Pruned</div>
-                  <div className="legend-item"><div className="dot top-path"></div> Best Paths</div>
+                  <div className="legend-item"><div className="dot top-path" style={{ background: '#fbc02d' }}></div> Gold (Best)</div>
+                  <div className="legend-item"><div className="dot top-path" style={{ background: '#bdbdbd' }}></div> Silver</div>
+                  <div className="legend-item"><div className="dot top-path" style={{ background: '#cd7f32' }}></div> Bronze</div>
                 </div>
 
                 {/* TOOLTIP OVERLAY */}
@@ -275,15 +316,13 @@ function App() {
                   <div className="inspector-tooltip" style={{ bottom: 10, left: 10 }}>
                     <div className="inspector-row"><span className="label">Score</span> <span className="value">{hoveredNode.score}</span></div>
                     <div className="inspector-row"><span className="label">Depth</span> <span className="value">{hoveredNode.depth}</span></div>
-                    <div className="inspector-row"><span className="label">Type</span> <span className="value">{hoveredNode.type.toUpperCase()}</span></div>
-                    {hoveredNode.is_pruned && <div style={{ color: '#ff5252', marginTop: 4 }}>PRUNED (Cutoff)</div>}
+                    <div className="inspector-row"><span className="label">Type</span> <span className="value">{hoveredNode.type?.toUpperCase()}</span></div>
+                    {hoveredNode.is_pruned && <div style={{ color: '#ff5252', marginTop: 4, fontWeight: 'bold' }}>PRUNED (Cutoff)</div>}
+                    <div style={{ marginTop: 8, fontSize: 10, color: '#666', borderTop: '1px solid #333', paddingTop: 4 }}>
+                      {hoveredNode.type === 'max' ? "Bot trying to maximize score" : "Opponent trying to minimize score"}
+                    </div>
                   </div>
                 )}
-              </div>
-
-              <div className="speed-control">
-                <label>Viz Speed</label>
-                <input type="range" min="1" max="10" value={speed} onChange={e => setSpeed(Number(e.target.value))} />
               </div>
             </div>
 

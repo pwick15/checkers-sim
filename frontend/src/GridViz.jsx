@@ -14,30 +14,37 @@ export default function GridViz({
 
     // Calculate Layout
     const layout = useMemo(() => {
-        if (allNodes.length === 0) return null;
+        // We want to fill the available width of the container.
+        // However, canvas width needs to be explicit.
+        // Let's assume a default width but allow it to be flexible via CSS? 
+        // No, canvas drawing coords need to match pixel width.
+        // For now, let's bump width to 600 or make it dynamic if we passed prop.
+        // User said "too much empty space", implying previously it was fixed/small.
 
-        // We want a layout that preserves time (visit order) but also hierarchy?
-        // Actually, simple grid by visit order is best for "Search Progress".
-        // 
-        // Let's stick to the grid. 
-        // Width = fixed or auto?
-        const canvasWidth = 460;
-        // Calculate required height based on aspect ratio or fixed?
-
-        const count = allNodes.length;
-        const cols = Math.ceil(Math.sqrt(count * 1.5)); // slightly wider aspect
-        const rows = Math.ceil(count / cols);
-
+        // Let's try to fit more dots per row.
+        const canvasWidth = 800; // Wider canvas
         const PADDING = 20;
         const availWidth = canvasWidth - PADDING * 2;
-        // const availHeight // dependent on rows
 
-        const dotSize = Math.max(3, Math.min(8, Math.floor(availWidth / cols) - 2));
-        const spacing = dotSize + 2;
+        if (allNodes.length === 0) return { positions: [], width: canvasWidth, height: 300, dotSize: 4 };
 
+        // Calculate optimal dot size to fill space reasonably
+        // heuristic: target roughly sqrt(N) * aspect ratio rows/cols
+        const count = allNodes.length;
+        // sq = Math.sqrt(count * 600/300) ... 
+
+        let dotSize = 6;
+        let spacing = 8;
+
+        if (count > 1000) { dotSize = 4; spacing = 5; }
+        if (count > 5000) { dotSize = 3; spacing = 4; }
+        if (count > 10000) { dotSize = 2; spacing = 3; }
+
+        // Cols
+        const cols = Math.floor(availWidth / spacing);
+        const rows = Math.ceil(count / cols);
         const totalHeight = rows * spacing + PADDING * 2;
 
-        // Generate positions
         const positions = allNodes.map((node, i) => ({
             x: PADDING + (i % cols) * spacing,
             y: PADDING + Math.floor(i / cols) * spacing,
@@ -54,19 +61,27 @@ export default function GridViz({
 
         const checkHover = (e) => {
             const rect = canvas.getBoundingClientRect();
-            const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+            // Scale mouse coordinates to canvas coordinates
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
 
-            // Find node
-            // Simple linear search is fast enough for <10k nodes
-            // Optimization: spatial hash if needed.
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+
+            // Find best match
             let found = null;
+            let bestDist = Infinity;
+            const radiusSq = (layout.dotSize + 4) ** 2; // generous hit area
+
+            // Optimization: limit search space? 
+            // For <20k nodes linear search is actually fine in modern JS engines (sub-ms).
             for (let p of layout.positions) {
                 const dx = mouseX - p.x;
                 const dy = mouseY - p.y;
-                if (dx * dx + dy * dy < layout.dotSize * layout.dotSize * 4) { // generous hit
+                const d2 = dx * dx + dy * dy;
+                if (d2 < radiusSq && d2 < bestDist) {
+                    bestDist = d2;
                     found = p.node;
-                    break;
                 }
             }
 
@@ -94,7 +109,7 @@ export default function GridViz({
             canvas.removeEventListener('mouseleave', handleLeave);
             canvas.removeEventListener('click', handleClick);
         }
-    }, [layout, onNodeHover, onNodeClick, hoveredNode]); // Added hoveredNode to dep to ensure click captures it? No, ref or state.
+    }, [layout, onNodeHover, onNodeClick, hoveredNode]);
 
 
     // Draw
@@ -108,69 +123,83 @@ export default function GridViz({
 
         const { positions, dotSize } = layout;
 
-        positions.forEach((p, i) => {
-            // STYLE LOGIC
-            // 1. Unexplored (idx >= exploredCount) -> Dimmed
-            // 2. Explored (idx < exploredCount) -> Colored
-            // 3. Pruned (node.is_pruned) -> Gray/Red X
-            // 4. Top Move (node.is_top_move) -> Highlight
-            // 5. Rank Colors for top 3?
+        // Batch drawing by style for performance? 
+        // Actually direct loop is easier to read and 10k items is fine for canvas 2d.
 
+        positions.forEach((p, i) => {
             const isExplored = i < exploredCount;
+            if (!isExplored) {
+                // Optional: Don't draw unexplored to keep it clean, or draw faint dots
+                // Drawing thousands of faint dots helps visualize the "Space".
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath();
+                ctx.rect(p.x, p.y, dotSize, dotSize); // rect is faster than arc
+                ctx.fill();
+                return;
+            }
+
             const isPruned = p.node.is_pruned;
             const isTop = p.node.is_top_move;
 
             ctx.beginPath();
 
-            if (!isExplored) {
-                ctx.fillStyle = '#222'; // Unexplored placeholder
+            // Color Logic
+            if (isPruned) {
+                ctx.fillStyle = '#444'; // Pruned = Grey
+            } else if (isTop) {
+                // Check branch_rank
+                if (p.node.branch_rank === 0) ctx.fillStyle = '#fbc02d'; // Gold
+                else if (p.node.branch_rank === 1) ctx.fillStyle = '#bdbdbd'; // Silver
+                else if (p.node.branch_rank === 2) ctx.fillStyle = '#cd7f32'; // Bronze
+                else ctx.fillStyle = '#4caf50'; // Fallback green
             } else {
-                if (isPruned) {
-                    ctx.fillStyle = '#444'; // Pruned
-                } else if (isTop) {
-                    // Rank-based color?
-                    if (p.node.branch_rank === 0) ctx.fillStyle = '#fbc02d'; // Gold
-                    else if (p.node.branch_rank === 1) ctx.fillStyle = '#bdbdbd'; // Silver
-                    else ctx.fillStyle = '#cd7f32'; // Bronze
-                } else {
-                    ctx.fillStyle = '#3a506b'; // Generic explored (Blueish for search)
-                }
+                // Standard Node
+                if (p.node.depth % 2 === 0) ctx.fillStyle = '#3a506b'; // Max
+                else ctx.fillStyle = '#5c6bc0'; // Min
             }
 
             // Hover highlight
             if (hoveredNode && hoveredNode.id === p.node.id) {
                 ctx.fillStyle = '#fff';
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = 8;
                 ctx.shadowColor = '#fff';
+                ctx.arc(p.x + dotSize / 2, p.y + dotSize / 2, dotSize, 0, Math.PI * 2);
             } else {
                 ctx.shadowBlur = 0;
+                ctx.arc(p.x + dotSize / 2, p.y + dotSize / 2, dotSize / 2, 0, Math.PI * 2);
             }
 
-            ctx.arc(p.x, p.y, dotSize / 2, 0, Math.PI * 2);
             ctx.fill();
 
-            // Draw X for pruned?
-            if (isExplored && isPruned) {
-                ctx.strokeStyle = '#666';
+            // Draw X for pruned
+            if (isPruned) {
+                ctx.strokeStyle = '#d32f2f'; // Red X for prune cutoff
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 const r = dotSize / 2;
-                ctx.moveTo(p.x - r, p.y - r);
-                ctx.lineTo(p.x + r, p.y + r);
+                const cx = p.x + r;
+                const cy = p.y + r;
+                ctx.moveTo(cx - r, cy - r);
+                ctx.lineTo(cx + r, cy + r);
+                ctx.moveTo(cx + r, cy - r);
+                ctx.lineTo(cx - r, cy + r);
                 ctx.stroke();
             }
         });
 
     }, [layout, exploredCount, hoveredNode]);
 
-    if (!layout) return <div style={{ padding: 20, color: '#666', textAlign: 'center' }}>Waiting for Bot...</div>;
+    if (!layout) return <div style={{ padding: 20, color: '#666', textAlign: 'center' }}>Waiting for data...</div>;
 
     return (
-        <canvas
-            ref={canvasRef}
-            id="grid-canvas"
-            width={layout.width}
-            height={layout.height}
-        />
+        <div style={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
+            <canvas
+                ref={canvasRef}
+                id="grid-canvas"
+                width={layout.width}
+                height={layout.height}
+                style={{ display: 'block' }}
+            />
+        </div>
     );
 }
