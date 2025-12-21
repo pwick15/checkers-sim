@@ -12,6 +12,49 @@ const getNotation = (r, c) => {
   return (r * 4) + Math.floor(c / 2) + 1;
 };
 
+const MiniBoard = ({ board, lastMove }) => {
+  return (
+    <div className="mini-board-wrapper">
+      <div className="mini-board-scale">
+        <Board board={board} lastMove={lastMove} onSquareClick={() => { }} />
+      </div>
+    </div>
+  );
+};
+
+const SimulationPathExplorer = ({ path }) => {
+  if (!path || !path.moves) return null;
+
+  return (
+    <div className="simulation-path-explorer">
+      <h4 style={{ color: '#fbc02d', margin: '20px 0 10px 0', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        AI Future Prediction (PV Path)
+      </h4>
+      <div className="path-snapshots">
+        {path.moves.map((step, i) => (
+          <div key={i} className="path-snapshot-item">
+            <div className="snapshot-label">
+              <span className="step-num">#{i + 1}</span>
+              <span className="player-tag" style={{ color: step.player === 'red' ? '#e57373' : '#90caf9' }}>
+                {step.player === 'red' ? 'YOU' : 'AI'}
+              </span>
+            </div>
+            <MiniBoard board={step.board_state} lastMove={{ from: step.from, to: step.to }} />
+            <div className="snapshot-math">
+              <div className={`snapshot-score ${step.score >= 0 ? 'positive' : 'negative'}`}>
+                {step.score >= 0 ? '+' : ''}{step.score}
+              </div>
+              <div className="snapshot-desc">
+                {getNotation(step.from[0], step.from[1])} → {getNotation(step.to[0], step.to[1])}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [page, setPage] = useState('landing');
   const [algo, setAlgo] = useState('alphabeta');
@@ -158,7 +201,7 @@ function App() {
       const data = await res.json();
 
       if (data.analysis && data.analysis.nodes.length > 0) {
-        setAnalysis(data.analysis);
+        setAnalysis({ ...data.analysis, simulation_paths: data.simulation_paths });
         startAnimation(data.analysis.nodes.length, data.moves, data.intermediate_states);
       } else {
         await fetchState(gameId);
@@ -477,48 +520,39 @@ function App() {
             <p style={{ fontSize: 14, color: '#999' }}>How the AI evaluates this position's strength.</p>
 
             {explainerNode.score_breakdown ? (
-              <div style={{ marginTop: 20 }}>
-                <div style={{ marginBottom: 20, borderLeft: '4px solid #fbc02d', padding: '12px 16px', color: '#eceff1', fontSize: 13, lineHeight: '1.5', background: 'rgba(251, 192, 45, 0.05)', borderRadius: '0 12px 12px 0' }}>
-                  <strong>The "Tug-of-War" Analogy:</strong> Think of the score as a rope.
-                  When the number is <strong>Positive (+)</strong>, you are pulling the game toward your victory.
-                  When it's <strong>Negative (-)</strong>, the Bot has pulled the advantage to its side.
-                </div>
-
-                <h4 style={{ color: '#fbc02d', marginBottom: 15, fontSize: 14 }}>1. Local Math (Current Board)</h4>
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: 15, borderRadius: 12, marginBottom: 20 }}>
-                  {Object.entries(explainerNode.score_breakdown).map(([key, val]) => {
-                    const details = {
-                      'Pieces': 'Basic Math: Each of your pieces is +10. Each bot piece is -10.',
-                      'Kings': 'Power Up: Kings are worth +15 (You) or -15 (Bot) because they move backwards.',
-                      'Position': 'Safety: Extra points for keeping pieces on the edges where they can\'t be jumped.'
-                    }[key] || 'General board evaluation factor.';
-
-                    return (
-                      <div key={key} style={{ marginBottom: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                          <span style={{ fontWeight: 'bold', color: '#fff', fontSize: 13 }}>{key}</span>
-                          <span className={val >= 0 ? 'positive' : 'negative'} style={{ fontWeight: 'bold' }}>{val >= 0 ? '+' : ''}{val}</span>
-                        </div>
-                        <div style={{ fontSize: 11, color: '#90a4ae' }}>{details}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <h4 style={{ color: '#fbc02d', marginBottom: 10, fontSize: 14 }}>2. The Prediction (Future Outcome)</h4>
-                <div style={{ background: 'linear-gradient(to right, #1e2330, #263238)', padding: 18, borderRadius: 12, border: '1px solid #455a64' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 14, color: '#fff' }}>Predicted Score:</span>
-                    <span className={explainerNode.score >= 0 ? 'positive' : 'negative'} style={{ fontSize: 28, fontWeight: 'bold' }}>
-                      {explainerNode.score >= 0 ? '+' : ''}{explainerNode.score}
-                    </span>
+              <div className="explainer-scroll-area">
+                <div style={{ marginTop: 20 }}>
+                  <div className="analogy-box">
+                    <strong>The "Tug-of-War" Analogy:</strong> Think of the score as a rope.
+                    When the number is <strong>Positive (+)</strong>, you are pulling the game toward victory.
+                    When it's <strong>Negative (-)</strong>, the Bot has the advantage.
                   </div>
-                  <p style={{ fontSize: 12, color: '#cfd8dc', marginTop: 10, lineHeight: 1.4 }}>
-                    <strong>Wait, why is the score different from the math?</strong> <br />
-                    The "Local Math" only looks at the board *right now*. But the <strong>Predicted Score</strong> is what the AI found by looking <strong>3 moves ahead</strong>.
-                    It might see that even though you have more pieces *now*, you will lose one in 2 moves!
-                  </p>
+
+                  <h4 style={{ color: '#fbc02d', marginBottom: 15, fontSize: 13, textTransform: 'uppercase' }}>1. Local Math (Current Board)</h4>
+                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: 15, borderRadius: 12, marginBottom: 20 }}>
+                    {Object.entries(explainerNode.score_breakdown).map(([key, val]) => {
+                      const details = {
+                        'Pieces': 'Basic Math: Each of your pieces is +10. Each bot piece is -10.',
+                        'Kings': 'Power Up: Kings are worth +15 (You) or -15 (Bot) because they move backwards.',
+                        'Position': 'Safety: Extra points for keeping pieces on the edges where they can\'t be jumped.'
+                      }[key] || 'General board evaluation factor.';
+
+                      return (
+                        <div key={key} style={{ marginBottom: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                            <span style={{ fontWeight: 'bold', color: '#fff', fontSize: 13 }}>{key}</span>
+                            <span className={val >= 0 ? 'positive' : 'negative'} style={{ fontWeight: 'bold' }}>{val >= 0 ? '+' : ''}{val}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#90a4ae' }}>{details}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                {explainerNode.rank && analysis.simulation_paths && analysis.simulation_paths[explainerNode.rank - 1] && (
+                  <SimulationPathExplorer path={analysis.simulation_paths[explainerNode.rank - 1]} />
+                )}
               </div>
             ) : (
               <div style={{ marginTop: 20, padding: 20, background: 'rgba(255,193,7,0.1)', borderRadius: 12, border: '1px solid #ffc107' }}>
@@ -559,17 +593,17 @@ function App() {
       {/* STATUS BAR */}
       <div className="status-bar">
         <div style={{ display: 'flex', gap: 20 }}>
-          <span><strong>DEBUG:</strong> AI Mode: {algo?.toUpperCase()}</span>
-          <span><strong>STATES EXPLORED:</strong> {exploredCount.toLocaleString()}</span>
+          <span><strong>AI Mode:</strong> {algo?.toUpperCase()}</span>
+          <span><strong>States Explored:</strong> {exploredCount.toLocaleString()}</span>
         </div>
         <div>
           {hoveredNode ? (
-            <span>Analyzing: Move from {getNotation(hoveredNode.move?.from[0], hoveredNode.move?.from[1])} | Score: <strong style={{ color: hoveredNode.score >= 0 ? '#4caf50' : '#f44336' }}>{hoveredNode.score}</strong></span>
+            <span>Analyzing: {getNotation(hoveredNode.move?.from[0], hoveredNode.move?.from[1])} → {getNotation(hoveredNode.move?.to[0], hoveredNode.move?.to[1])} | Score: <strong style={{ color: hoveredNode.score >= 0 ? '#4caf50' : '#f44336' }}>{hoveredNode.score}</strong></span>
           ) : (
             "Hover over a dot or move to see the AI's logic"
           )}
         </div>
-        <div style={{ color: '#666' }}>Checkers Sim v1.2</div>
+        <div style={{ color: '#666' }}>Checkers AI Sim</div>
       </div>
 
       <OnboardingTour

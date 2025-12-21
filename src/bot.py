@@ -36,6 +36,23 @@ class BotPlayer(ABC):
         """
         self.color = color
 
+    def _serialize_board(self, board):
+        """Helper to serialize board for storage in tree nodes."""
+        grid = []
+        for r in range(8):
+            row = []
+            for c in range(8):
+                piece = board.get_piece(r, c)
+                if piece:
+                    row.append({
+                        "color": piece.color,
+                        "is_king": piece.is_king
+                    })
+                else:
+                    row.append(None)
+            grid.append(row)
+        return grid
+
     @abstractmethod
     def get_move(self, game):
         """
@@ -128,70 +145,47 @@ class MinimaxBot(BotPlayer):
     def extract_simulation_paths(self, num_branches=None):
         """
         Extract branch simulations from the decision tree.
-
-        Returns a list of simulation paths, where each path contains:
-        - branch_index: Index of this branch (0-based)
-        - moves: List of moves in the optimal path through this branch
-        - final_score: The evaluated score for this branch
-
-        Args:
-            num_branches (int): Number of top-level branches to extract (None = all branches)
-
-        Returns:
-            list: List of simulation path dictionaries
+        Each move now includes score_breakdown and board_state for visual step-through.
         """
         if not self.last_decision_tree or not self.last_decision_tree.children:
-            print("No decision tree or no children")
             return []
 
         paths = []
         opponent_color = 'black' if self.color == 'red' else 'red'
 
-        # Get all branches sorted by score (best first)
-        total_children = len(self.last_decision_tree.children)
-        print(f"Decision tree has {total_children} children (possible first moves)")
-
         branches = sorted(self.last_decision_tree.children,
                          key=lambda n: n.score if n.score is not None else float('-inf'),
                          reverse=True)
 
-        # Limit to num_branches if specified
         if num_branches is not None:
             branches = branches[:num_branches]
-            print(f"Limited to {num_branches} branches")
-        else:
-            print(f"Extracting all {len(branches)} branches")
 
         for idx, branch in enumerate(branches):
             moves = []
             current_node = branch
-            is_maximizing = False  # First move after root is opponent's response
+            is_maximizing = False 
 
-            # Trace down the optimal path
             while current_node:
                 if current_node.move:
-                    # Determine whose move this is based on depth
-                    # Depth 1 = AI move, Depth 2 = Opponent move, etc.
                     player = self.color if current_node.depth % 2 == 1 else opponent_color
 
                     moves.append({
                         "from": current_node.move[0],
                         "to": current_node.move[1],
                         "player": player,
-                        "depth": current_node.depth
+                        "depth": current_node.depth,
+                        "score": current_node.score,
+                        "score_breakdown": current_node.score_breakdown,
+                        "board_state": current_node.board_state
                     })
 
-                # Find best child to continue path
                 if not current_node.children:
                     break
 
-                # Alternate between max and min
                 if is_maximizing:
-                    # AI's turn: pick highest score
                     next_node = max(current_node.children,
                                    key=lambda n: n.score if n.score is not None else float('-inf'))
                 else:
-                    # Opponent's turn: pick lowest score
                     next_node = min(current_node.children,
                                    key=lambda n: n.score if n.score is not None else float('inf'))
 
@@ -201,10 +195,11 @@ class MinimaxBot(BotPlayer):
             paths.append({
                 "branch_index": idx,
                 "moves": moves,
-                "final_score": branch.score
+                "final_score": branch.score,
+                "score_breakdown": branch.score_breakdown,
+                "board_state": branch.board_state
             })
 
-        print(f"Returning {len(paths)} simulation paths")
         return paths
 
     def get_analysis_data(self):
@@ -376,9 +371,10 @@ class MinimaxBot(BotPlayer):
         if parent_node:
             parent_node.visit_order = self.visit_counter
             self.visit_counter += 1
-            # Capture local breakdown for every node
+            # Capture local state for every node
             local_eval = self._evaluate_board(game)
             parent_node.score_breakdown = local_eval['breakdown']
+            parent_node.board_state = self._serialize_board(game.board)
 
         # Base case: depth 0 or game over
         if depth == 0 or game.is_over():
@@ -579,9 +575,10 @@ class AlphaBetaBot(MinimaxBot):
         if parent_node:
             parent_node.visit_order = self.visit_counter
             self.visit_counter += 1
-            # Capture local breakdown for every node
+            # Capture local state for every node
             local_eval = self._evaluate_board(game)
             parent_node.score_breakdown = local_eval['breakdown']
+            parent_node.board_state = self._serialize_board(game.board)
 
         if depth == 0 or game.is_over():
             return self._evaluate_board(game)

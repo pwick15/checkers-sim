@@ -691,3 +691,118 @@
     display: flex;
     gap: 15px;
 }
+
+/* Simulation Path Styles */
+.explainer-scroll-area {
+    max-height: 450px;
+    overflow-y: auto;
+    padding-right: 15px;
+    margin-top: 10px;
+}
+
+.explainer-scroll-area::-webkit-scrollbar {
+    width: 6px;
+}
+
+.explainer-scroll-area::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 10px;
+}
+
+.analogy-box {
+    margin-bottom: 25px;
+    border-left: 4px solid #fbc02d;
+    padding: 12px 16px;
+    color: #eceff1;
+    font-size: 13px;
+    line-height: 1.6;
+    background: rgba(251, 192, 45, 0.05);
+    border-radius: 0 12px 12px 0;
+}
+
+.simulation-path-explorer {
+    margin-top: 10px;
+    padding-top: 10px;
+}
+
+.path-snapshots {
+    display: flex;
+    gap: 15px;
+    overflow-x: auto;
+    padding: 10px 5px 20px 5px;
+    scroll-behavior: smooth;
+}
+
+.path-snapshots::-webkit-scrollbar {
+    height: 6px;
+}
+
+.path-snapshots::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 10px;
+}
+
+.path-snapshot-item {
+    flex-shrink: 0;
+    width: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid #222;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.path-snapshot-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-4px);
+}
+
+.snapshot-label {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 10px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.step-num {
+    background: #333;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #fff;
+}
+
+.mini-board-wrapper {
+    width: 120px;
+    height: 120px;
+    overflow: hidden;
+    border-radius: 6px;
+    border: 2px solid #000;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.mini-board-scale {
+    transform: scale(0.25);
+    transform-origin: top left;
+}
+
+.snapshot-math {
+    margin-top: 12px;
+    text-align: center;
+}
+
+.snapshot-score {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.snapshot-desc {
+    font-size: 11px;
+    color: #90a4ae;
+    font-weight: 500;
+}
