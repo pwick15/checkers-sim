@@ -17,6 +17,7 @@ class DecisionNode:
     def __init__(self, move, score=None, children=None):
         self.move = move
         self.score = score
+        self.score_breakdown = None # NEW: Detailed stats for leaf nodes
         self.children = children if children is not None else []
         self.visit_order = None  # NEW: sequence in DFS traversal
         self.is_pruned = False   # NEW: alpha-beta pruning flag
@@ -51,14 +52,19 @@ class BotPlayer(ABC):
     def get_all_possible_moves(self, game):
         """
         Get all possible moves for the bot's color.
-
-        Args:
-            game (Game): The current game state
-
-        Returns:
-            list: List of ((start_pos, end_pos), is_capture) tuples
         """
         moves = []
+
+        # If turn is restricted to a specific piece (multi-jump)
+        if hasattr(game, 'jumping_piece') and game.jumping_piece:
+            r, c = game.jumping_piece
+            piece = game.board.get_piece(r, c)
+            if piece and piece.color == self.color:
+                valid_moves = game.board.get_valid_moves(piece, r, c)
+                for end_pos, captured in valid_moves.items():
+                    if captured is not None: # ONLY capture moves allowed during multi-jump
+                        moves.append((((r, c), end_pos), True))
+            return moves
 
         for r in range(8):
             for c in range(8):
@@ -274,7 +280,8 @@ class MinimaxBot(BotPlayer):
                 } if node.move else None,
                 
                 'is_top_move': current_rank != -1 and current_rank < 3,
-                'branch_rank': current_rank
+                'branch_rank': current_rank,
+                'score_breakdown': node.score_breakdown
             }
             
             flat_nodes.append(node_data)
@@ -337,8 +344,10 @@ class MinimaxBot(BotPlayer):
             self.last_decision_tree.children.append(move_node)
 
             # Get score for this move
-            score = self._minimax(game_copy, self.depth - 1, False, move_node)
+            eval_data = self._minimax(game_copy, self.depth - 1, False, move_node)
+            score = eval_data['score']
             move_node.score = score
+            move_node.score_breakdown = eval_data.get('breakdown')
 
             if score > best_score:
                 best_score = score
@@ -370,7 +379,10 @@ class MinimaxBot(BotPlayer):
 
         # Base case: depth 0 or game over
         if depth == 0 or game.is_over():
-            return self._evaluate_board(game)
+            eval_res = self._evaluate_board(game)
+            if parent_node:
+                parent_node.score_breakdown = eval_res['breakdown']
+            return eval_res
 
         if is_maximizing:
             # Maximizing player (bot)
@@ -394,14 +406,18 @@ class MinimaxBot(BotPlayer):
                             else:
                                 child_node = None
 
-                            score = self._minimax(game_copy, depth - 1, False, child_node)
+                            eval_data = self._minimax(game_copy, depth - 1, False, child_node)
+                            score = eval_data['score']
                             
                             if child_node:
                                 child_node.score = score
+                                child_node.score_breakdown = eval_data.get('breakdown')
 
                             max_score = max(max_score, score)
 
-            return max_score if max_score != float('-inf') else self._evaluate_board(game)
+            if max_score == float('-inf'):
+                return self._evaluate_board(game)
+            return {'score': max_score}
         else:
             # Minimizing player (opponent)
             min_score = float('inf')
@@ -425,60 +441,61 @@ class MinimaxBot(BotPlayer):
                             else:
                                 child_node = None
 
-                            score = self._minimax(game_copy, depth - 1, True, child_node)
+                            eval_data = self._minimax(game_copy, depth - 1, True, child_node)
+                            score = eval_data['score']
                             
                             if child_node:
                                 child_node.score = score
+                                child_node.score_breakdown = eval_data.get('breakdown')
 
                             min_score = min(min_score, score)
 
-            return min_score if min_score != float('inf') else self._evaluate_board(game)
+            if min_score == float('inf'):
+                return self._evaluate_board(game)
+            return {'score': min_score}
 
     def _evaluate_board(self, game):
         """
         Evaluate the board position.
 
-        Higher scores are better for the bot.
-
-        Evaluation factors:
-        - Piece count: Each piece is worth points
-        - King pieces: Kings are worth more than regular pieces
-        - Position: Pieces in better positions get bonuses
-        - Winner: If there's a winner, return extreme values
+        Returns:
+            dict: { 'score': int, 'breakdown': dict }
         """
         if game.winner == self.color:
-            return 10000  # Bot wins
+            return {'score': 10000, 'breakdown': {'Winner': 10000}}
         elif game.winner is not None:
-            return -10000  # Bot loses
+            return {'score': -10000, 'breakdown': {'Winner': -10000}}
 
         score = 0
+        breakdown = {
+            'Pieces': 0,
+            'Kings': 0,
+            'Position': 0
+        }
         opponent_color = 'black' if self.color == 'red' else 'red'
 
         for r in range(8):
             for c in range(8):
                 piece = game.board.get_piece(r, c)
                 if piece:
-                    piece_value = 0
-
-                    # Base value
+                    # Piece value
+                    val = 15 if piece.is_king else 10
+                    
+                    # Position bonus
+                    pos_bonus = (7 - r) if piece.color == 'red' else r
+                    
+                    multiplier = 1 if piece.color == self.color else -1
+                    
                     if piece.is_king:
-                        piece_value = 15  # Kings are valuable
+                        breakdown['Kings'] += (15 * multiplier)
                     else:
-                        piece_value = 10  # Regular pieces
+                        breakdown['Pieces'] += (10 * multiplier)
+                    
+                    breakdown['Position'] += (pos_bonus * multiplier)
+                    
+                    score += (val + pos_bonus) * multiplier
 
-                    # Position bonus: advance pieces toward enemy side
-                    if piece.color == 'red':
-                        piece_value += (7 - r)  # Red moves up
-                    else:
-                        piece_value += r  # Black moves down
-
-                    # Add or subtract based on color
-                    if piece.color == self.color:
-                        score += piece_value
-                    else:
-                        score -= piece_value
-
-        return score
+        return {'score': score, 'breakdown': breakdown}
 
     def _copy_game(self, game):
         """Create a deep copy of the game state."""
@@ -532,8 +549,10 @@ class AlphaBetaBot(MinimaxBot):
             move_node.depth = 1
             self.last_decision_tree.children.append(move_node)
 
-            score = self._alpha_beta(game_copy, self.depth - 1, alpha, beta, False, move_node)
+            eval_data = self._alpha_beta(game_copy, self.depth - 1, alpha, beta, False, move_node)
+            score = eval_data['score']
             move_node.score = score
+            move_node.score_breakdown = eval_data.get('breakdown')
 
             if score > best_score:
                 best_score = score
@@ -565,7 +584,10 @@ class AlphaBetaBot(MinimaxBot):
             self.visit_counter += 1
 
         if depth == 0 or game.is_over():
-            return self._evaluate_board(game)
+            eval_res = self._evaluate_board(game)
+            if parent_node:
+                parent_node.score_breakdown = eval_res['breakdown']
+            return eval_res
 
         if is_maximizing:
             max_score = float('-inf')
@@ -592,8 +614,10 @@ class AlphaBetaBot(MinimaxBot):
                 game_copy = self._copy_game(game)
                 game_copy.play_move(child.move[0], child.move[1])
                 
-                score = self._alpha_beta(game_copy, depth - 1, alpha, beta, False, child)
+                eval_data = self._alpha_beta(game_copy, depth - 1, alpha, beta, False, child)
+                score = eval_data['score']
                 child.score = score
+                child.score_breakdown = eval_data.get('breakdown')
                 
                 max_score = max(max_score, score)
                 alpha = max(alpha, score)
@@ -605,9 +629,11 @@ class AlphaBetaBot(MinimaxBot):
                         sibling_to_prune.is_pruned = True
                         sibling_to_prune.visit_order = self.visit_counter
                         self.visit_counter += 1
-                    return max_score
+                    return {'score': max_score}
 
-            return max_score if max_score != float('-inf') else self._evaluate_board(game)
+            if max_score == float('-inf'):
+                return self._evaluate_board(game)
+            return {'score': max_score}
         else: # Minimizing
             min_score = float('inf')
             opponent_color = 'black' if self.color == 'red' else 'red'
@@ -633,8 +659,10 @@ class AlphaBetaBot(MinimaxBot):
                 game_copy = self._copy_game(game)
                 game_copy.play_move(child.move[0], child.move[1])
                 
-                score = self._alpha_beta(game_copy, depth - 1, alpha, beta, True, child)
+                eval_data = self._alpha_beta(game_copy, depth - 1, alpha, beta, True, child)
+                score = eval_data['score']
                 child.score = score
+                child.score_breakdown = eval_data.get('breakdown')
                 
                 min_score = min(min_score, score)
                 beta = min(beta, score)
@@ -646,5 +674,7 @@ class AlphaBetaBot(MinimaxBot):
                         sibling_to_prune.is_pruned = True
                         sibling_to_prune.visit_order = self.visit_counter
                         self.visit_counter += 1
-                    return min_score
-            return min_score if min_score != float('inf') else self._evaluate_board(game)
+                    return {'score': min_score}
+            if min_score == float('inf'):
+                return self._evaluate_board(game)
+            return {'score': min_score}

@@ -31,15 +31,16 @@ const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId }) =
         };
         traverse(tree, 0);
 
-        // 2. Assign positions
-        const position = (node, x, y, depth) => {
+        // 2. Assign positions and track parents
+        const position = (node, x, y, depth, parent = null) => {
             node.x = x + node._w / 2;
             node.y = y;
+            node.parent = parent;
             nodes.push(node);
 
             let currentX = x;
             (node.children || []).forEach(child => {
-                position(child, currentX, y + levelHeight, depth + 1);
+                position(child, currentX, y + levelHeight, depth + 1, node);
                 links.push({ source: node, target: child });
                 currentX += child._w + 20;
             });
@@ -48,6 +49,18 @@ const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId }) =
 
         return { nodes, links };
     }, [tree]);
+
+    // Path tracing for highlighting
+    const highlightPath = useMemo(() => {
+        if (!highlightedId || !layout) return new Set();
+        const path = new Set();
+        let curr = layout.nodes.find(n => n.id === highlightedId);
+        while (curr) {
+            path.add(curr.id);
+            curr = curr.parent;
+        }
+        return path;
+    }, [highlightedId, layout]);
 
     // --- Interaction ---
     const handleWheel = (e) => {
@@ -98,35 +111,44 @@ const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId }) =
         >
             <svg width="100%" height="100%" ref={svgRef} style={{ cursor: dragging ? 'grabbing' : 'grab' }}>
                 <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`}>
-                    {layout.links.map((l, i) => (
-                        <line
-                            key={i}
-                            x1={l.source.x} y1={l.source.y}
-                            x2={l.target.x} y2={l.target.y}
-                            stroke="#555"
-                            strokeWidth="1"
-                            opacity="0.6"
-                        />
-                    ))}
+                    {layout.links.map((l, i) => {
+                        const inPath = highlightPath.has(l.target.id);
+                        return (
+                            <line
+                                key={i}
+                                x1={l.source.x} y1={l.source.y}
+                                x2={l.target.x} y2={l.target.y}
+                                stroke={inPath ? '#00e676' : '#555'}
+                                strokeWidth={inPath ? 3 : 1}
+                                opacity={inPath ? 1 : 0.4}
+                            />
+                        );
+                    })}
 
                     {layout.nodes.map((n, i) => {
                         const isHigh = n.id === highlightedId;
+                        const inPath = highlightPath.has(n.id);
                         const isTop = n.branch_rank !== undefined && n.branch_rank < 3;
-                        let fill = '#999';
+
+                        let fill = '#444';
                         let r = 5;
 
                         if (n.score > 0) fill = '#4caf50';
                         else if (n.score < 0) fill = '#f44336';
 
+                        // Best nodes in Green variants
                         if (isTop) {
-                            if (n.branch_rank === 0) { fill = '#fbc02d'; r = 8; }
-                            else if (n.branch_rank === 1) { fill = '#bdbdbd'; r = 7; }
-                            else if (n.branch_rank === 2) { fill = '#cd7f32'; r = 6; }
+                            if (n.branch_rank === 0) fill = '#00e676';
+                            else if (n.branch_rank === 1) fill = '#66bb6a';
+                            else if (n.branch_rank === 2) fill = '#a5d6a7';
+                            r = 7;
                         }
 
-                        // Highlight overrides
+                        // Interaction overrides
+                        if (inPath) r = Math.max(r, 8);
                         if (isHigh) {
                             r = 12;
+                            fill = '#fff';
                         }
 
                         return (

@@ -13,34 +13,38 @@ export default function GridViz({
     const allNodes = analysis?.nodes || [];
 
     // Calculate Layout
-    const layout = useMemo(() => {
-        // We want to fill the available width of the container.
-        // However, canvas width needs to be explicit.
-        // Let's assume a default width but allow it to be flexible via CSS? 
-        // No, canvas drawing coords need to match pixel width.
-        // For now, let's bump width to 600 or make it dynamic if we passed prop.
-        // User said "too much empty space", implying previously it was fixed/small.
+    const [containerWidth, setContainerWidth] = useState(400);
 
-        // Let's try to fit more dots per row.
-        const canvasWidth = 800; // Wider canvas
-        const PADDING = 20;
+    useEffect(() => {
+        const obs = new ResizeObserver(entries => {
+            if (entries[0]) setContainerWidth(entries[0].contentRect.width);
+        });
+        const parent = canvasRef.current?.parentElement;
+        if (parent) obs.observe(parent);
+        return () => obs.disconnect();
+    }, []);
+
+    // Calculate Layout
+    const layout = useMemo(() => {
+        const canvasWidth = containerWidth;
+        const PADDING = 10;
         const availWidth = canvasWidth - PADDING * 2;
 
-        if (allNodes.length === 0) return { positions: [], width: canvasWidth, height: 300, dotSize: 4 };
+        if (allNodes.length === 0 || availWidth <= 0)
+            return { positions: [], width: canvasWidth, height: 100, dotSize: 4 };
 
-        // Calculate optimal dot size to fill space reasonably
-        // heuristic: target roughly sqrt(N) * aspect ratio rows/cols
         const count = allNodes.length;
-        // sq = Math.sqrt(count * 600/300) ... 
 
-        let dotSize = 8;
-        let spacing = 10;
+        // Dynamic sizing based on density
+        let dotSize = 10;
+        let spacing = 14;
 
-        if (count > 1000) { dotSize = 5; spacing = 6; }
-        if (count > 5000) { dotSize = 4; spacing = 5; }
+        if (count > 500) { dotSize = 8; spacing = 11; }
+        if (count > 1000) { dotSize = 6; spacing = 8; }
+        if (count > 2000) { dotSize = 4; spacing = 6; }
+        if (count > 5000) { dotSize = 3; spacing = 5; }
         if (count > 10000) { dotSize = 2; spacing = 3; }
 
-        // Cols
         const cols = Math.floor(availWidth / spacing);
         const rows = Math.ceil(count / cols);
         const totalHeight = rows * spacing + PADDING * 2;
@@ -51,8 +55,8 @@ export default function GridViz({
             node
         }));
 
-        return { positions, dotSize, width: canvasWidth, height: Math.max(300, totalHeight) };
-    }, [allNodes]);
+        return { positions, dotSize, width: canvasWidth, height: Math.max(100, totalHeight) };
+    }, [allNodes, containerWidth]);
 
 
     useEffect(() => {

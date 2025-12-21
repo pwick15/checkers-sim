@@ -42,8 +42,12 @@ function App() {
   const speedRef = useRef(speed);
   useEffect(() => { speedRef.current = speed; }, [speed]);
 
-  const [lastMove, setLastMove] = useState(null); // NEW: Track last move
-  const [showTree, setShowTree] = useState(false); // NEW: Tree Modal
+  const [lastMove, setLastMove] = useState(null);
+  const [showTree, setShowTree] = useState(false);
+
+  // Educational State
+  const [explainerNode, setExplainerNode] = useState(null); // Node details for score explainer
+  const [pruneExplain, setPruneExplain] = useState(false); // To show pruning concept
 
   const requestRef = useRef();
 
@@ -253,6 +257,9 @@ function App() {
                   {analysis.top_moves.map((m, i) => {
                     const fromNot = getNotation(m.from_pos[0], m.from_pos[1]);
                     const toNot = getNotation(m.to_pos[0], m.to_pos[1]);
+                    // Match top move to detailed node for explainer
+                    const moveNode = analysis.nodes.find(n => n.id === m.visit_order);
+
                     return (
                       <div key={i} className={`top-move-item rank-${i + 1}`}>
                         <div className="move-info">
@@ -261,7 +268,13 @@ function App() {
                             ({m.from_pos[0]},{m.from_pos[1]}) → ({m.to_pos[0]},{m.to_pos[1]})
                           </div>
                         </div>
-                        <div className={`move-score ${m.score > 0 ? 'positive' : 'negative'}`}>
+                        <div
+                          className={`move-score ${m.score > 0 ? 'positive' : 'negative'} clickable-score`}
+                          title={moveNode?.score_breakdown ?
+                            Object.entries(moveNode.score_breakdown).map(([k, v]) => `${k}: ${v}`).join(', ') :
+                            "Click for details"}
+                          onClick={() => setExplainerNode(moveNode)}
+                        >
                           {m.score > 0 ? '+' : ''}{m.score}
                         </div>
                       </div>
@@ -272,7 +285,7 @@ function App() {
             )}
 
             {/* SEARCH GRID CARD */}
-            <div className="analysis-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+            <div className="analysis-card" style={{ display: 'flex', flexDirection: 'column', position: 'relative', minHeight: '200px' }}>
               <div className="analysis-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Search Space ({exploredCount} / {analysis?.total_explored || 0})</span>
 
@@ -323,20 +336,24 @@ function App() {
                 {/* LEGEND */}
                 <div className="legend">
                   <div className="legend-item"><div className="dot explored" style={{ background: '#3949ab' }}></div> Explored (Max)</div>
-                  <div className="legend-item"><div className="dot pruned" style={{ background: '#5c6bc0' }}></div> Explored (Min)</div>
+                  <div className="legend-item"><div className="dot explored" style={{ background: '#5c6bc0' }}></div> Explored (Min)</div>
                   <div className="legend-item"><div className="dot pruned" style={{ background: '#444', border: '1px solid #777' }}></div> Pruned</div>
                   <div className="legend-item"><div className="dot top-path" style={{ background: '#00e676' }}></div> Best Path</div>
                 </div>
 
                 {/* TOOLTIP OVERLAY */}
                 {hoveredNode && (
-                  <div className="inspector-tooltip" style={{ bottom: 10, left: 10 }}>
+                  <div className="inspector-tooltip" style={{ bottom: 10, left: 10, pointerEvents: 'auto', cursor: 'pointer' }}
+                    onClick={() => {
+                      if (hoveredNode.is_pruned) setPruneExplain(true);
+                      else setExplainerNode(hoveredNode);
+                    }}>
                     <div className="inspector-row"><span className="label">Score</span> <span className="value">{hoveredNode.score}</span></div>
                     <div className="inspector-row"><span className="label">Depth</span> <span className="value">{hoveredNode.depth}</span></div>
                     <div className="inspector-row"><span className="label">Type</span> <span className="value">{hoveredNode.type?.toUpperCase()}</span></div>
                     {hoveredNode.is_pruned && <div style={{ color: '#ff5252', marginTop: 4, fontWeight: 'bold' }}>PRUNED (Cutoff)</div>}
-                    <div style={{ marginTop: 8, fontSize: 10, color: '#666', borderTop: '1px solid #333', paddingTop: 4 }}>
-                      {hoveredNode.type === 'max' ? "Bot trying to maximize score" : "Opponent trying to minimize score"}
+                    <div style={{ marginTop: 8, fontSize: 10, color: '#aaa', borderTop: '1px solid #333', paddingTop: 4 }}>
+                      {hoveredNode.is_pruned ? "Click to learn why this was skipped" : "Click to see scoring breakdown"}
                     </div>
                   </div>
                 )}
@@ -370,6 +387,77 @@ function App() {
           />
         </div>
       </div>
+
+      {/* WIN MODAL */}
+      {winner && (
+        <div className="modal-overlay">
+          <div className="modal-content win-modal">
+            <h2>{winner.toUpperCase()} WINS!</h2>
+            <p>A brilliant display of strategy. Ready for another round?</p>
+            <div style={{ display: 'flex', gap: 15, justifyContent: 'center', marginTop: 30 }}>
+              <button className="play-button" onClick={handleStartGame}>New Game</button>
+              <button className="control-btn" onClick={() => setPage('landing')}>Main Menu</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SCORE EXPLAINER */}
+      {explainerNode && (
+        <div className="modal-overlay" onClick={() => setExplainerNode(null)}>
+          <div className="modal-content explainer-modal" onClick={e => e.stopPropagation()}>
+            <h3>Scoring Breakdown</h3>
+            <p style={{ fontSize: 14, color: '#999' }}>How the AI evaluates this position's strength.</p>
+
+            {explainerNode.score_breakdown ? (
+              <div style={{ marginTop: 20 }}>
+                {Object.entries(explainerNode.score_breakdown).map(([key, val]) => (
+                  <div key={key} className="score-breakdown-row">
+                    <span>{key}</span>
+                    <span className={val >= 0 ? 'positive' : 'negative'}>{val >= 0 ? '+' : ''}{val}</span>
+                  </div>
+                ))}
+                <div className="score-breakdown-row">
+                  <span>Final Evaluation Score</span>
+                  <span className={explainerNode.score >= 0 ? 'positive' : 'negative'}>{explainerNode.score}</span>
+                </div>
+              </div>
+            ) : (
+              <p style={{ marginTop: 20, color: '#bbb' }}>
+                This is an intermediate node. Its score ({explainerNode.score}) was inherited from its best-performing future outcome (Minimax).
+              </p>
+            )}
+
+            <div style={{ marginTop: 30, fontSize: 13, background: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 8 }}>
+              <strong>Did you know?</strong> Positive scores favor Red (You), while negative scores favor Black (Bot). The AI always picks the path leading to the best future score!
+            </div>
+
+            <button className="control-btn" style={{ marginTop: 20, width: '100%' }} onClick={() => setExplainerNode(null)}>Got it</button>
+          </div>
+        </div>
+      )}
+
+      {/* PRUNE EXPLAINER */}
+      {pruneExplain && (
+        <div className="modal-overlay" onClick={() => setPruneExplain(null)}>
+          <div className="modal-content explainer-modal" onClick={e => e.stopPropagation()}>
+            <h3 style={{ color: '#ff5252' }}>Alpha-Beta Pruning</h3>
+            <p style={{ fontSize: 14, color: '#999' }}>Why did the AI skip this move?</p>
+
+            <div style={{ marginTop: 20, lineHeight: 1.6 }}>
+              <p>The AI skipped this branch because it already found a <strong>guaranteed better option</strong> elsewhere.</p>
+              <p>In competitive search, if one path is already proven to be worse than a previously discovered move, the AI "prunes" it to save time and think deeper on promising paths.</p>
+            </div>
+
+            <div style={{ marginTop: 20, display: 'flex', gap: 10, alignItems: 'center', background: '#000', padding: 10, borderRadius: 8 }}>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#444', border: '1px solid #d32f2f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>X</div>
+              <div style={{ fontSize: 12 }}>This symbol represents a "Cutoff". No need to look further if we already know it's a lost cause!</div>
+            </div>
+
+            <button className="control-btn" style={{ marginTop: 20, width: '100%' }} onClick={() => setPruneExplain(false)}>I understand</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

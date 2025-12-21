@@ -106,11 +106,10 @@
 #analysis-panel {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     height: 100%;
     overflow-y: auto;
-    padding-right: 8px;
-    /* scrollbar space */
+    padding-right: 4px;
 }
 
 /* Cards */
@@ -118,7 +117,7 @@
     background: #151921;
     border: 1px solid #2a303e;
     border-radius: 12px;
-    padding: 16px;
+    padding: 12px;
 }
 
 .analysis-header {
@@ -346,13 +345,13 @@
     }
 }
 
+
 /* Tree Slide-in Panel */
 .tree-slide-panel {
     position: fixed;
     top: 0;
     right: 0;
     width: 60vw;
-    /* Wider */
     min-width: 600px;
     height: 100vh;
     background: #0d0f15;
@@ -360,9 +359,7 @@
     z-index: 2000;
     box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
     transform: translateX(100%);
-    /* Hidden by default */
     transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-    /* Smooth slide */
     display: flex;
     flex-direction: column;
 }
@@ -397,7 +394,6 @@
 .tree-content {
     flex: 1;
     overflow: hidden;
-    /* Canvas handles scroll/pan */
     position: relative;
     background: #080a0e;
     cursor: grab;
@@ -405,4 +401,70 @@
 
 .tree-content:active {
     cursor: grabbing;
+}
+
+/* Modal Base */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    z-index: 3000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: #1e2330;
+    border: 1px solid #333;
+    border-radius: 16px;
+    padding: 30px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    position: relative;
+}
+
+.win-modal {
+    text-align: center;
+    border-color: #fbc02d;
+}
+
+.win-modal h2 {
+    color: #fbc02d;
+    font-size: 32px;
+    margin-bottom: 20px;
+}
+
+.explainer-modal h3 {
+    color: #4caf50;
+    margin-top: 0;
+}
+
+.score-breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #333;
+}
+
+.score-breakdown-row:last-child {
+    border-bottom: none;
+    font-weight: bold;
+    color: #fff;
+    font-size: 16px;
+}
+
+/* Interactive elements */
+.clickable-score {
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+
+.clickable-score:hover {
+    color: #fff;
 }

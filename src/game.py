@@ -15,6 +15,7 @@ class Game:
         self.current_turn = 'red'  # Red starts
         self.winner = None
         self.silent = silent
+        self.jumping_piece = None # Tracks piece that MUST continue jumping
 
     def switch_turn(self):
         """
@@ -24,6 +25,7 @@ class Game:
             self.current_turn = 'black'
         else:
             self.current_turn = 'red'
+        self.jumping_piece = None # Reset when turn formally ends
 
     def play_move(self, start_pos, end_pos):
         """
@@ -51,17 +53,34 @@ class Game:
                 print(f"Error: It's {self.current_turn}'s turn.")
             return False
 
+        # Multi-jump constraint
+        if self.jumping_piece and (start_row, start_col) != self.jumping_piece:
+            if not self.silent:
+                print("Error: You must continue the jump with the same piece.")
+            return False
+
         valid_moves = self.board.get_valid_moves(piece, start_row, start_col)
 
-        # Check if the move is a capture
-        capture_moves = {move: captured for move, captured in valid_moves.items() if captured is not None}
+        # Global Capture Rule: If ANY piece can capture, player MUST capture.
+        any_piece_can_capture = False
+        for r in range(8):
+            for c in range(8):
+                p = self.board.get_piece(r, c)
+                if p and p.color == self.current_turn:
+                    ms = self.board.get_valid_moves(p, r, c)
+                    if any(v is not None for v in ms.values()):
+                        any_piece_can_capture = True
+                        break
+            if any_piece_can_capture: break
 
-        if capture_moves:
-            if end_pos not in capture_moves:
-                if not self.silent:
-                    print("Error: You must make a capture.")
-                return False
-        elif end_pos not in valid_moves:
+        is_this_a_capture = valid_moves.get(end_pos) is not None
+
+        if any_piece_can_capture and not is_this_a_capture:
+            if not self.silent:
+                print("Error: You must make a capture if available.")
+            return False
+
+        if end_pos not in valid_moves:
             if not self.silent:
                 print("Error: Invalid move.")
             return False
@@ -73,11 +92,13 @@ class Game:
         self.check_for_winner()
 
         # If the move was a capture and more captures are possible, the turn does not switch
-        if end_pos in capture_moves:
+        is_this_a_capture = valid_moves.get(end_pos) is not None
+        if is_this_a_capture:
             new_piece = self.board.get_piece(end_row, end_col)
             if new_piece:
                 further_captures = self.board.get_valid_moves(new_piece, end_row, end_col)
                 if any(v is not None for v in further_captures.values()):
+                    self.jumping_piece = (end_row, end_col)
                     if not self.silent:
                         print("Another capture is available. Your turn continues.")
                     return True # Turn continues
