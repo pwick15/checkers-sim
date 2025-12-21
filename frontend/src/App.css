@@ -470,6 +470,7 @@
 .clickable-score:hover {
     color: #fff;
 }
+
 /* Status Bar */
 .status-bar {
     position: fixed;
@@ -501,7 +502,7 @@
     pointer-events: none;
     z-index: 1000;
     width: 320px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
 }
 
 .progress-bar-container {
@@ -511,6 +512,7 @@
     margin-top: 16px;
     overflow: hidden;
 }
+
 .progress-bar {
     height: 100%;
     background: #fbc02d;
@@ -542,15 +544,22 @@
     padding: 20px;
     border-radius: 12px;
     width: 280px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     z-index: 5002;
     pointer-events: auto;
     animation: tour-bounce 0.4s ease-out;
 }
 
 @keyframes tour-bounce {
-    0% { transform: scale(0.9); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
+    0% {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 .tour-step-counter {
@@ -580,29 +589,8 @@
     gap: 10px;
 }
 
-.tour-pos-right {
-    top: 50%;
-    left: calc(50% + 280px); /* Adjust based on board size */
-    transform: translateY(-50%);
-}
+/* Bubble positions now dynamic - removing fixed classes */
 
-.tour-pos-left {
-    top: 50%;
-    right: calc(50% + 280px);
-    transform: translateY(-50%);
-}
-
-.tour-pos-bottom {
-    top: 60%;
-    left: 50%;
-    transform: translate(-50%, 40px);
-}
-
-.tour-pos-top {
-    bottom: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-}
 
 /* Algorithm Explainer */
 .explainer-overlay {
@@ -625,7 +613,7 @@
     width: 600px;
     max-width: 90%;
     padding: 40px;
-    box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
     position: relative;
     overflow: hidden;
 }

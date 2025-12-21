@@ -236,7 +236,8 @@ class MinimaxBot(BotPlayer):
                  'score': child.score,
                  'from_pos': child.move[0],
                  'to_pos': child.move[1],
-                 'visit_order': child.visit_order
+                 'visit_order': child.visit_order,
+                 'score_breakdown': child.score_breakdown
              })
              child.rank = i # Tag for grid coloring
 
@@ -347,7 +348,6 @@ class MinimaxBot(BotPlayer):
             eval_data = self._minimax(game_copy, self.depth - 1, False, move_node)
             score = eval_data['score']
             move_node.score = score
-            move_node.score_breakdown = eval_data.get('breakdown')
 
             if score > best_score:
                 best_score = score
@@ -376,13 +376,13 @@ class MinimaxBot(BotPlayer):
         if parent_node:
             parent_node.visit_order = self.visit_counter
             self.visit_counter += 1
+            # Capture local breakdown for every node
+            local_eval = self._evaluate_board(game)
+            parent_node.score_breakdown = local_eval['breakdown']
 
         # Base case: depth 0 or game over
         if depth == 0 or game.is_over():
-            eval_res = self._evaluate_board(game)
-            if parent_node:
-                parent_node.score_breakdown = eval_res['breakdown']
-            return eval_res
+            return self._evaluate_board(game)
 
         if is_maximizing:
             # Maximizing player (bot)
@@ -411,7 +411,6 @@ class MinimaxBot(BotPlayer):
                             
                             if child_node:
                                 child_node.score = score
-                                child_node.score_breakdown = eval_data.get('breakdown')
 
                             max_score = max(max_score, score)
 
@@ -446,7 +445,6 @@ class MinimaxBot(BotPlayer):
                             
                             if child_node:
                                 child_node.score = score
-                                child_node.score_breakdown = eval_data.get('breakdown')
 
                             min_score = min(min_score, score)
 
@@ -552,7 +550,6 @@ class AlphaBetaBot(MinimaxBot):
             eval_data = self._alpha_beta(game_copy, self.depth - 1, alpha, beta, False, move_node)
             score = eval_data['score']
             move_node.score = score
-            move_node.score_breakdown = eval_data.get('breakdown')
 
             if score > best_score:
                 best_score = score
@@ -582,12 +579,12 @@ class AlphaBetaBot(MinimaxBot):
         if parent_node:
             parent_node.visit_order = self.visit_counter
             self.visit_counter += 1
+            # Capture local breakdown for every node
+            local_eval = self._evaluate_board(game)
+            parent_node.score_breakdown = local_eval['breakdown']
 
         if depth == 0 or game.is_over():
-            eval_res = self._evaluate_board(game)
-            if parent_node:
-                parent_node.score_breakdown = eval_res['breakdown']
-            return eval_res
+            return self._evaluate_board(game)
 
         if is_maximizing:
             max_score = float('-inf')
@@ -617,7 +614,6 @@ class AlphaBetaBot(MinimaxBot):
                 eval_data = self._alpha_beta(game_copy, depth - 1, alpha, beta, False, child)
                 score = eval_data['score']
                 child.score = score
-                child.score_breakdown = eval_data.get('breakdown')
                 
                 max_score = max(max_score, score)
                 alpha = max(alpha, score)
@@ -662,7 +658,6 @@ class AlphaBetaBot(MinimaxBot):
                 eval_data = self._alpha_beta(game_copy, depth - 1, alpha, beta, True, child)
                 score = eval_data['score']
                 child.score = score
-                child.score_breakdown = eval_data.get('breakdown')
                 
                 min_score = min(min_score, score)
                 beta = min(beta, score)

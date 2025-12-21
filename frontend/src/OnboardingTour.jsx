@@ -37,6 +37,31 @@ const OnboardingTour = ({ active, onComplete }) => {
         }
     ];
 
+    const [bubbleStyle, setBubbleStyle] = useState({});
+
+    useEffect(() => {
+        if (active) {
+            const el = document.querySelector(steps[step].target);
+            if (el) {
+                const rect = el.getBoundingClientRect();
+                const pos = steps[step].position;
+                let style = {};
+
+                if (pos === 'right') {
+                    style = { top: rect.top + rect.height / 2, left: rect.right + 20, transform: 'translateY(-50%)' };
+                } else if (pos === 'left') {
+                    style = { top: rect.top + rect.height / 2, left: rect.left - 300, transform: 'translateY(-50%)' };
+                } else if (pos === 'bottom') {
+                    style = { top: rect.bottom + 20, left: rect.left + rect.width / 2, transform: 'translateX(-50%)' };
+                } else if (pos === 'top') {
+                    style = { top: rect.top - 200, left: rect.left + rect.width / 2, transform: 'translateX(-50%)' };
+                }
+                setBubbleStyle(style);
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }, [step, active]);
+
     if (!active) return null;
 
     const currentStep = steps[step];
@@ -53,7 +78,7 @@ const OnboardingTour = ({ active, onComplete }) => {
 
     return (
         <div className="tour-overlay">
-            <div className={`tour-bubble tour-pos-${currentStep.position}`}>
+            <div className="tour-bubble" style={bubbleStyle}>
                 <div className="tour-step-counter">{step + 1} / {steps.length}</div>
                 <h3>{currentStep.title}</h3>
                 <p>{currentStep.content}</p>

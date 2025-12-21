@@ -321,14 +321,12 @@ function App() {
                   {analysis.top_moves.map((m, i) => {
                     const fromNot = getNotation(m.from_pos[0], m.from_pos[1]);
                     const toNot = getNotation(m.to_pos[0], m.to_pos[1]);
-                    // Match top move to detailed node for explainer
-                    const moveNode = analysis.nodes.find(n => n.id === m.visit_order);
 
                     return (
                       <div
                         key={i}
                         className={`top-move-item rank-${i + 1}`}
-                        onMouseEnter={() => setHoveredNode(moveNode)}
+                        onMouseEnter={() => setHoveredNode(m)}
                         onMouseLeave={() => setHoveredNode(null)}
                       >
                         <div className="move-info">
@@ -339,10 +337,10 @@ function App() {
                         </div>
                         <div
                           className={`move-score ${m.score > 0 ? 'positive' : 'negative'} clickable-score`}
-                          title={moveNode?.score_breakdown ?
-                            Object.entries(moveNode.score_breakdown).map(([k, v]) => `${k}: ${v}`).join(', ') :
+                          title={m.score_breakdown ?
+                            Object.entries(m.score_breakdown).map(([k, v]) => `${k}: ${v}`).join(', ') :
                             "Click for details"}
-                          onClick={() => setExplainerNode(moveNode)}
+                          onClick={() => setExplainerNode(m)}
                         >
                           {m.score > 0 ? '+' : ''}{m.score}
                         </div>
@@ -480,50 +478,56 @@ function App() {
 
             {explainerNode.score_breakdown ? (
               <div style={{ marginTop: 20 }}>
-                <div style={{ marginBottom: 15, fontStyle: 'italic', borderLeft: '3px solid #fbc02d', paddingLeft: 12, color: '#b0bec5', fontSize: 13, lineHeight: '1.4' }}>
-                  <strong>The Balance Sheet Analogy:</strong> Think of this like a health checkup. "Pieces" are your current health, but "Position" is your fitness level. The AI selects moves that result in the highest combined "health and fitness" for itself!
+                <div style={{ marginBottom: 20, borderLeft: '4px solid #fbc02d', padding: '12px 16px', color: '#eceff1', fontSize: 13, lineHeight: '1.5', background: 'rgba(251, 192, 45, 0.05)', borderRadius: '0 12px 12px 0' }}>
+                  <strong>The "Tug-of-War" Analogy:</strong> Think of the score as a rope.
+                  When the number is <strong>Positive (+)</strong>, you are pulling the game toward your victory.
+                  When it's <strong>Negative (-)</strong>, the Bot has pulled the advantage to its side.
                 </div>
-                {Object.entries(explainerNode.score_breakdown).map(([key, val]) => {
-                  const details = {
-                    'Pieces': 'Net piece count. Standard pieces are 10, Kings are 15.',
-                    'Kings': 'Bonus for having more mobility with King pieces.',
-                    'Position': 'Control of the center and advancing towards the opponent.'
-                  }[key] || 'General board evaluation factor.';
 
-                  return (
-                    <div key={key} style={{ marginBottom: 10 }}>
-                      <div className="score-breakdown-row" style={{ borderBottom: 'none', padding: '0 0 4px 0' }}>
-                        <span style={{ fontWeight: 'bold', color: '#fff' }}>{key}</span>
-                        <span className={val >= 0 ? 'positive' : 'negative'} style={{ fontSize: 16 }}>{val >= 0 ? '+' : ''}{val}</span>
+                <h4 style={{ color: '#fbc02d', marginBottom: 15, fontSize: 14 }}>1. Local Math (Current Board)</h4>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: 15, borderRadius: 12, marginBottom: 20 }}>
+                  {Object.entries(explainerNode.score_breakdown).map(([key, val]) => {
+                    const details = {
+                      'Pieces': 'Basic Math: Each of your pieces is +10. Each bot piece is -10.',
+                      'Kings': 'Power Up: Kings are worth +15 (You) or -15 (Bot) because they move backwards.',
+                      'Position': 'Safety: Extra points for keeping pieces on the edges where they can\'t be jumped.'
+                    }[key] || 'General board evaluation factor.';
+
+                    return (
+                      <div key={key} style={{ marginBottom: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <span style={{ fontWeight: 'bold', color: '#fff', fontSize: 13 }}>{key}</span>
+                          <span className={val >= 0 ? 'positive' : 'negative'} style={{ fontWeight: 'bold' }}>{val >= 0 ? '+' : ''}{val}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#90a4ae' }}>{details}</div>
                       </div>
-                      <div style={{ fontSize: 11, color: '#6a768a' }}>{details}</div>
-                    </div>
-                  );
-                })}
-                <div className="score-breakdown-row" style={{ marginTop: 15, borderTop: '1px solid #333', paddingTop: 10 }}>
-                  <span style={{ fontSize: 15 }}>Final Aggregated Score</span>
-                  <span className={explainerNode.score >= 0 ? 'positive' : 'negative'} style={{ fontSize: 20 }}>{explainerNode.score}</span>
+                    );
+                  })}
+                </div>
+
+                <h4 style={{ color: '#fbc02d', marginBottom: 10, fontSize: 14 }}>2. The Prediction (Future Outcome)</h4>
+                <div style={{ background: 'linear-gradient(to right, #1e2330, #263238)', padding: 18, borderRadius: 12, border: '1px solid #455a64' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 14, color: '#fff' }}>Predicted Score:</span>
+                    <span className={explainerNode.score >= 0 ? 'positive' : 'negative'} style={{ fontSize: 28, fontWeight: 'bold' }}>
+                      {explainerNode.score >= 0 ? '+' : ''}{explainerNode.score}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 12, color: '#cfd8dc', marginTop: 10, lineHeight: 1.4 }}>
+                    <strong>Wait, why is the score different from the math?</strong> <br />
+                    The "Local Math" only looks at the board *right now*. But the <strong>Predicted Score</strong> is what the AI found by looking <strong>3 moves ahead</strong>.
+                    It might see that even though you have more pieces *now*, you will lose one in 2 moves!
+                  </p>
                 </div>
               </div>
             ) : (
-              <p style={{ marginTop: 20, color: '#bbb' }}>
-                This is an intermediate node. Its score ({explainerNode.score}) was inherited from its best-performing future outcome (Minimax).
-              </p>
+              <div style={{ marginTop: 20, padding: 20, background: 'rgba(255,193,7,0.1)', borderRadius: 12, border: '1px solid #ffc107' }}>
+                <h4 style={{ margin: '0 0 10px 0', color: '#ffc107' }}>Hidden Strategy Node</h4>
+                <p style={{ margin: 0, fontSize: 14, color: '#ddd', lineHeight: 1.5 }}>
+                  The AI didn't calculate the local math for this specific dot to save speed. Instead, it "inherited" the score from the best future move it found further down this path.
+                </p>
+              </div>
             )}
-
-            <div style={{ marginTop: 20, fontSize: 13, color: '#ccc', background: 'rgba(0,0,0,0.2)', padding: 15, borderRadius: 12 }}>
-              <strong><span style={{ color: '#fbc02d' }}>🎓</span> Strategy Guide:</strong>
-              <p style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5 }}>
-                In Minimax logic, a <strong>Positive (+12)</strong> score means the current player (usually You/Red) is winning. A <strong>Negative (-5)</strong> score means the opponent (Black Bot) has the advantage.
-              </p>
-              <p style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5 }}>
-                The Bot will always pick the path that leads to the <strong>Lowest possible score</strong> at the leaf nodes (since it wants to win), while it assumes You will pick the <strong>Highest</strong>.
-              </p>
-            </div>
-
-            <div style={{ marginTop: 30, fontSize: 13, background: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 8 }}>
-              <strong>Did you know?</strong> Positive scores favor Red (You), while negative scores favor Black (Bot). The AI always picks the path leading to the best future score!
-            </div>
 
             <button className="control-btn" style={{ marginTop: 20, width: '100%' }} onClick={() => setExplainerNode(null)}>Got it</button>
           </div>
