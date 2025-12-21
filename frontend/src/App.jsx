@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Board from './Board';
 import GridViz from './GridViz';
+import TreeView from './TreeView';
 import './App.css';
+
+// Checkers Notation Helper
+const getNotation = (r, c) => {
+  if (r === undefined || c === undefined) return "?";
+  return (r * 4) + Math.floor(c / 2) + 1;
+};
 
 function App() {
   const [page, setPage] = useState('landing');
@@ -36,6 +43,7 @@ function App() {
   useEffect(() => { speedRef.current = speed; }, [speed]);
 
   const [lastMove, setLastMove] = useState(null); // NEW: Track last move
+  const [showTree, setShowTree] = useState(false); // NEW: Tree Modal
 
   const requestRef = useRef();
 
@@ -242,17 +250,23 @@ function App() {
               <div className="analysis-card">
                 <div className="analysis-header">Top Candidates</div>
                 <div className="top-moves-list">
-                  {analysis.top_moves.map((m, i) => (
-                    <div key={i} className={`top-move-item rank-${i + 1}`}>
-                      <div className="move-info">
-                        <div className="move-notation">Move {i + 1}</div>
-                        <div className="move-coords">({m.from_pos[0]},{m.from_pos[1]}) → ({m.to_pos[0]},{m.to_pos[1]})</div>
+                  {analysis.top_moves.map((m, i) => {
+                    const fromNot = getNotation(m.from_pos[0], m.from_pos[1]);
+                    const toNot = getNotation(m.to_pos[0], m.to_pos[1]);
+                    return (
+                      <div key={i} className={`top-move-item rank-${i + 1}`}>
+                        <div className="move-info">
+                          <div className="move-notation">Move {i + 1}: {fromNot} - {toNot}</div>
+                          <div className="move-coords" style={{ fontSize: 10, opacity: 0.5 }}>
+                            ({m.from_pos[0]},{m.from_pos[1]}) → ({m.to_pos[0]},{m.to_pos[1]})
+                          </div>
+                        </div>
+                        <div className={`move-score ${m.score > 0 ? 'positive' : 'negative'}`}>
+                          {m.score > 0 ? '+' : ''}{m.score}
+                        </div>
                       </div>
-                      <div className={`move-score ${m.score > 0 ? 'positive' : 'negative'}`}>
-                        {m.score > 0 ? '+' : ''}{m.score}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -288,7 +302,7 @@ function App() {
                   <button
                     className="control-btn small"
                     style={{ padding: '4px 12px', fontSize: 12 }}
-                    onClick={() => window.alert("Tree View: Coming Soon (Detailed Structure)")}
+                    onClick={() => setShowTree(true)}
                   >
                     Show Tree
                   </button>
@@ -300,15 +314,18 @@ function App() {
                   analysis={analysis}
                   exploredCount={exploredCount}
                   onNodeHover={setHoveredNode}
+                  onNodeClick={(node) => {
+                    setHoveredNode(node);
+                    setShowTree(true);
+                  }}
                 />
 
                 {/* LEGEND */}
                 <div className="legend">
-                  <div className="legend-item"><div className="dot explored"></div> Explored</div>
-                  <div className="legend-item"><div className="dot pruned"></div> Pruned</div>
-                  <div className="legend-item"><div className="dot top-path" style={{ background: '#fbc02d' }}></div> Gold (Best)</div>
-                  <div className="legend-item"><div className="dot top-path" style={{ background: '#bdbdbd' }}></div> Silver</div>
-                  <div className="legend-item"><div className="dot top-path" style={{ background: '#cd7f32' }}></div> Bronze</div>
+                  <div className="legend-item"><div className="dot explored" style={{ background: '#3949ab' }}></div> Explored (Max)</div>
+                  <div className="legend-item"><div className="dot pruned" style={{ background: '#5c6bc0' }}></div> Explored (Min)</div>
+                  <div className="legend-item"><div className="dot pruned" style={{ background: '#444', border: '1px solid #777' }}></div> Pruned</div>
+                  <div className="legend-item"><div className="dot top-path" style={{ background: '#00e676' }}></div> Best Path</div>
                 </div>
 
                 {/* TOOLTIP OVERLAY */}
@@ -329,8 +346,60 @@ function App() {
           </div>
         </div>
       )}
+      {/* TREE SLIDE-IN PANEL */}
+      <div className={`tree-slide-panel ${showTree ? 'open' : ''}`}>
+        <div className="tree-header">
+          <h2>
+            <div style={{ width: 10, height: 10, background: '#fbc02d', borderRadius: '50%', marginRight: 10 }}></div>
+            Decision Tree Explorer
+          </h2>
+          <div className="tree-controls">
+            <button className="control-btn small" onClick={() => setShowTree(false)}>Close</button>
+          </div>
+        </div>
+        <div className="tree-content">
+          <TreeView
+            tree={analysis ? reconstructTree(analysis.nodes) : null}
+            // Pass hovered node ID from GridViz interaction?
+            // Or we need a new state for 'clickedNodeId' 
+            // For now, let's use hoveredNode
+            highlightedId={hoveredNode?.id}
+            inputWidth={window.innerWidth * 0.6}
+            height={window.innerHeight - 60}
+            onClose={() => setShowTree(false)}
+          />
+        </div>
+      </div>
     </div>
   );
 }
+
+// Helper to reconstruct tree from flat list
+const reconstructTree = (flatNodes) => {
+  if (!flatNodes || flatNodes.length === 0) return null;
+
+  // Create map
+  const nodeMap = {};
+  flatNodes.forEach(n => {
+    // Clone to avoid mutating original flat list if needed
+    nodeMap[n.id] = { ...n, children: [] };
+  });
+
+  let root = null;
+
+  flatNodes.forEach(n => {
+    const node = nodeMap[n.id];
+    if (n.parent_id === -1 || n.parent_id === undefined || !nodeMap[n.parent_id]) {
+      root = node;
+    } else {
+      nodeMap[n.parent_id].children.push(node);
+    }
+  });
+
+  // Sort children by score? Or original order?
+  // Original order (id) works.
+
+  return root;
+};
 
 export default App;

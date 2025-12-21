@@ -147,12 +147,11 @@ async def get_bot_move(game_id: str):
 
     tree_data = None
     simulation_paths = []
+    analysis_data = {}
     
+    # Capture analysis from the INITIAL decision (the most important one)
     if hasattr(bot, 'last_decision_tree') and bot.last_decision_tree:
-        # Use the specific web serializer
         tree_data = serialize_tree_for_web(bot.last_decision_tree, bot, game)
-
-        # Extract simulation paths for animation (first 5 branches for board display)
         if hasattr(bot, 'extract_simulation_paths'):
             simulation_paths = bot.extract_simulation_paths()
             # Add notation
@@ -164,21 +163,36 @@ async def get_bot_move(game_id: str):
                         'from': pos_to_notation(from_pos[0], from_pos[1]),
                         'to': pos_to_notation(to_pos[0], to_pos[1])
                     }
-
-        # Get analysis data for frontend
-        analysis_data = {}
         if hasattr(bot, 'get_analysis_data'):
             analysis_data = bot.get_analysis_data()
 
+    executed_moves = []
+    
     if move:
-        # Save state for undo
-        game_data["history"].append(copy.deepcopy(game))
-        game.play_move(move[0], move[1])
-        game_data["last_move"] = {"from": move[0], "to": move[1], "is_bot": True}
+        while True:
+            # Save state for undo (only once per turn? No, meaningful undo reverts the whole turn usually, 
+            # but our simple undo just pops one state. 
+            # If we push multiple states, user has to undo multiple times to back out of a double jump.
+            # This is acceptable for now.)
+            game_data["history"].append(copy.deepcopy(game))
+            
+            game.play_move(move[0], move[1])
+            executed_moves.append(move)
+            
+            game_data["last_move"] = {"from": move[0], "to": move[1], "is_bot": True}
+            
+            # Check if turn is still bot's (double jump available)
+            if game.current_turn == 'black' and not game.is_over():
+                 # Bot must move again
+                 move = bot.get_move(game)
+                 if not move:
+                     break # Should not happen if game logic is correct
+            else:
+                break
 
     return {
         "message": "Bot move successful",
-        "move": move,
+        "moves": executed_moves, # Return all steps
         "current_turn": game.current_turn,
         "winner": game.winner,
         "board": serialize_board(game.board),

@@ -1,3 +1,47 @@
+/* Popup Menu */
+.popup-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: #252b3b;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 4px;
+    display: none;
+    z-index: 200;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.popup-menu.show {
+    display: block;
+    animation: fadeIn 0.2s ease;
+}
+
+.popup-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    color: #e0e0e0;
+    font-size: 13px;
+    border-radius: 4px;
+}
+
+.popup-item:hover {
+    background: #333;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Rest of App.css content appended below to ensure no overwrite if I did it wrong */
 /* Layout */
 .app-container {
     display: flex;
@@ -301,108 +345,4 @@
 
 .undo-btn:hover {
     background: #3e2626;
-}
-
-/* Popup Menu */
-.popup-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    background: #252b3b;
-    border: 1px solid #333;
-    border-radius: 6px;
-    padding: 4px;
-    display: none;
-    z-index: 200;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-}
-
-.popup-menu.show {
-    display: block;
-    animation: fadeIn 0.2s ease;
-}
-
-.popup-item {
-    padding: 8px 16px;
-    cursor: pointer;
-    color: #e0e0e0;
-    font-size: 13px;
-    border-radius: 4px;
-}
-
-.popup-item:hover {
-    background: #333;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Tree Slide-in Panel */
-.tree-slide-panel {
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: 60vw;
-    /* Wider */
-    min-width: 600px;
-    height: 100vh;
-    background: #0d0f15;
-    border-left: 1px solid #333;
-    z-index: 2000;
-    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
-    transform: translateX(100%);
-    /* Hidden by default */
-    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-    /* Smooth slide */
-    display: flex;
-    flex-direction: column;
-}
-
-.tree-slide-panel.open {
-    transform: translateX(0);
-}
-
-.tree-header {
-    padding: 16px 24px;
-    background: #151921;
-    border-bottom: 1px solid #333;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.tree-header h2 {
-    margin: 0;
-    font-size: 18px;
-    color: #fbc02d;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.tree-controls {
-    display: flex;
-    gap: 10px;
-}
-
-.tree-content {
-    flex: 1;
-    overflow: hidden;
-    /* Canvas handles scroll/pan */
-    position: relative;
-    background: #080a0e;
-    cursor: grab;
-}
-
-.tree-content:active {
-    cursor: grabbing;
 }

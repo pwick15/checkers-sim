@@ -33,11 +33,11 @@ export default function GridViz({
         const count = allNodes.length;
         // sq = Math.sqrt(count * 600/300) ... 
 
-        let dotSize = 6;
-        let spacing = 8;
+        let dotSize = 8;
+        let spacing = 10;
 
-        if (count > 1000) { dotSize = 4; spacing = 5; }
-        if (count > 5000) { dotSize = 3; spacing = 4; }
+        if (count > 1000) { dotSize = 5; spacing = 6; }
+        if (count > 5000) { dotSize = 4; spacing = 5; }
         if (count > 10000) { dotSize = 2; spacing = 3; }
 
         // Cols
@@ -56,54 +56,40 @@ export default function GridViz({
 
 
     useEffect(() => {
+        // ... (mouse logic unchanged) ...
         const canvas = canvasRef.current;
         if (!canvas || !layout) return;
 
         const checkHover = (e) => {
             const rect = canvas.getBoundingClientRect();
-            // Scale mouse coordinates to canvas coordinates
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
-
             const mouseX = (e.clientX - rect.left) * scaleX;
             const mouseY = (e.clientY - rect.top) * scaleY;
 
-            // Find best match
             let found = null;
             let bestDist = Infinity;
-            const radiusSq = (layout.dotSize + 4) ** 2; // generous hit area
+            const radiusSq = (layout.dotSize / 2 + 4) ** 2; // Hit radius
 
-            // Optimization: limit search space? 
-            // For <20k nodes linear search is actually fine in modern JS engines (sub-ms).
             for (let p of layout.positions) {
-                const dx = mouseX - p.x;
-                const dy = mouseY - p.y;
+                const dx = mouseX - (p.x + layout.dotSize / 2); // Center align
+                const dy = mouseY - (p.y + layout.dotSize / 2);
                 const d2 = dx * dx + dy * dy;
                 if (d2 < radiusSq && d2 < bestDist) {
                     bestDist = d2;
                     found = p.node;
                 }
             }
-
             setHoveredNode(found);
             if (onNodeHover) onNodeHover(found);
         };
-
-        const handleLeave = () => {
-            setHoveredNode(null);
-            if (onNodeHover) onNodeHover(null);
-        }
-
-        const handleClick = () => {
-            if (hoveredNode && onNodeClick) {
-                onNodeClick(hoveredNode);
-            }
-        }
+        // ... listeners ...
+        const handleLeave = () => { setHoveredNode(null); if (onNodeHover) onNodeHover(null); };
+        const handleClick = () => { if (hoveredNode && onNodeClick) onNodeClick(hoveredNode); };
 
         canvas.addEventListener('mousemove', checkHover);
         canvas.addEventListener('mouseleave', handleLeave);
         canvas.addEventListener('click', handleClick);
-
         return () => {
             canvas.removeEventListener('mousemove', checkHover);
             canvas.removeEventListener('mouseleave', handleLeave);
@@ -117,23 +103,17 @@ export default function GridViz({
         const canvas = canvasRef.current;
         if (!canvas || !layout) return;
         const ctx = canvas.getContext('2d');
-
-        // Clear
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         const { positions, dotSize } = layout;
 
-        // Batch drawing by style for performance? 
-        // Actually direct loop is easier to read and 10k items is fine for canvas 2d.
-
         positions.forEach((p, i) => {
             const isExplored = i < exploredCount;
             if (!isExplored) {
-                // Optional: Don't draw unexplored to keep it clean, or draw faint dots
-                // Drawing thousands of faint dots helps visualize the "Space".
-                ctx.fillStyle = '#1a1a1a';
+                // Faint placeholder
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
                 ctx.beginPath();
-                ctx.rect(p.x, p.y, dotSize, dotSize); // rect is faster than arc
+                ctx.rect(p.x, p.y, dotSize, dotSize);
                 ctx.fill();
                 return;
             }
@@ -145,17 +125,18 @@ export default function GridViz({
 
             // Color Logic
             if (isPruned) {
-                ctx.fillStyle = '#444'; // Pruned = Grey
+                ctx.fillStyle = '#444';
             } else if (isTop) {
-                // Check branch_rank
-                if (p.node.branch_rank === 0) ctx.fillStyle = '#fbc02d'; // Gold
-                else if (p.node.branch_rank === 1) ctx.fillStyle = '#bdbdbd'; // Silver
-                else if (p.node.branch_rank === 2) ctx.fillStyle = '#cd7f32'; // Bronze
-                else ctx.fillStyle = '#4caf50'; // Fallback green
+                // User requested Best Nodes = Green
+                if (p.node.branch_rank === 0) ctx.fillStyle = '#00e676'; // Bright Green (Best)
+                else if (p.node.branch_rank === 1) ctx.fillStyle = '#66bb6a'; // Medium Green
+                else if (p.node.branch_rank === 2) ctx.fillStyle = '#a5d6a7'; // Light Green
+                else ctx.fillStyle = '#4caf50';
             } else {
-                // Standard Node
-                if (p.node.depth % 2 === 0) ctx.fillStyle = '#3a506b'; // Max
-                else ctx.fillStyle = '#5c6bc0'; // Min
+                // Standard Explored Nodes - Neutral Blue/Grey
+                // Differentiate Max vs Min layers nicely
+                if (p.node.depth % 2 === 0) ctx.fillStyle = '#3949ab'; // Indigo (Max)
+                else ctx.fillStyle = '#5c6bc0'; // Lighter Indigo (Min)
             }
 
             // Hover highlight
