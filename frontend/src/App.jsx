@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import Board from './Board';
 import GridViz from './GridViz';
 import TreeView from './TreeView';
+import OnboardingTour from './OnboardingTour';
+import AlgorithmExplainer from './AlgorithmExplainer';
 import './App.css';
 
 // Checkers Notation Helper
@@ -48,6 +50,8 @@ function App() {
   // Educational State
   const [explainerNode, setExplainerNode] = useState(null); // Node details for score explainer
   const [pruneExplain, setPruneExplain] = useState(false); // To show pruning concept
+  const [tourActive, setTourActive] = useState(false);
+  const [showExplainer, setShowExplainer] = useState(false);
 
   const requestRef = useRef();
 
@@ -72,7 +76,12 @@ function App() {
     }
   };
 
-  const handleStartGame = async () => {
+  const handleStartGame = () => {
+    setShowExplainer(true);
+  };
+
+  const finalizeStartGame = async () => {
+    setShowExplainer(false);
     try {
       const res = await fetch('/api/game', {
         method: 'POST',
@@ -88,6 +97,11 @@ function App() {
       setExploredCount(0);
       setStatus("Initializing...");
       await fetchState(data.game_id);
+
+      // Check for first-time tour
+      if (!localStorage.getItem('checkers_tour_completed')) {
+        setTimeout(() => setTourActive(true), 1000);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -265,7 +279,10 @@ function App() {
           {/* LEFT: BOARD */}
           <div id="board-area">
             <div id="board-header">
-              <button className="control-btn" onClick={() => setPage('landing')}>Exit</button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="control-btn" onClick={() => setPage('landing')}>Exit</button>
+                <button className="control-btn" onClick={() => setTourActive(true)} title="Restart Tour">?</button>
+              </div>
               <div style={{ fontSize: 20, fontWeight: 'bold', color: currentTurn === 'red' ? '#e57373' : '#90caf9' }}>{status}</div>
             </div>
 
@@ -463,18 +480,29 @@ function App() {
 
             {explainerNode.score_breakdown ? (
               <div style={{ marginTop: 20 }}>
-                <div style={{ marginBottom: 15, fontStyle: 'italic', borderLeft: '3px solid #fbc02d', paddingLeft: 12, color: '#b0bec5', fontSize: 14 }}>
+                <div style={{ marginBottom: 15, fontStyle: 'italic', borderLeft: '3px solid #fbc02d', paddingLeft: 12, color: '#b0bec5', fontSize: 13, lineHeight: '1.4' }}>
                   <strong>The Balance Sheet Analogy:</strong> Think of this like a health checkup. "Pieces" are your current health, but "Position" is your fitness level. The AI selects moves that result in the highest combined "health and fitness" for itself!
                 </div>
-                {Object.entries(explainerNode.score_breakdown).map(([key, val]) => (
-                  <div key={key} className="score-breakdown-row">
-                    <span>{key}</span>
-                    <span className={val >= 0 ? 'positive' : 'negative'}>{val >= 0 ? '+' : ''}{val}</span>
-                  </div>
-                ))}
-                <div className="score-breakdown-row">
-                  <span>Final Evaluation Score</span>
-                  <span className={explainerNode.score >= 0 ? 'positive' : 'negative'}>{explainerNode.score}</span>
+                {Object.entries(explainerNode.score_breakdown).map(([key, val]) => {
+                  const details = {
+                    'Pieces': 'Net piece count. Standard pieces are 10, Kings are 15.',
+                    'Kings': 'Bonus for having more mobility with King pieces.',
+                    'Position': 'Control of the center and advancing towards the opponent.'
+                  }[key] || 'General board evaluation factor.';
+
+                  return (
+                    <div key={key} style={{ marginBottom: 10 }}>
+                      <div className="score-breakdown-row" style={{ borderBottom: 'none', padding: '0 0 4px 0' }}>
+                        <span style={{ fontWeight: 'bold', color: '#fff' }}>{key}</span>
+                        <span className={val >= 0 ? 'positive' : 'negative'} style={{ fontSize: 16 }}>{val >= 0 ? '+' : ''}{val}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#6a768a' }}>{details}</div>
+                    </div>
+                  );
+                })}
+                <div className="score-breakdown-row" style={{ marginTop: 15, borderTop: '1px solid #333', paddingTop: 10 }}>
+                  <span style={{ fontSize: 15 }}>Final Aggregated Score</span>
+                  <span className={explainerNode.score >= 0 ? 'positive' : 'negative'} style={{ fontSize: 20 }}>{explainerNode.score}</span>
                 </div>
               </div>
             ) : (
@@ -483,13 +511,14 @@ function App() {
               </p>
             )}
 
-            <div style={{ marginTop: 20, fontSize: 13, color: '#ccc', background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 8 }}>
-              <strong>Heuristic Guide (Strategy):</strong>
-              <ul style={{ marginTop: 5, paddingLeft: 18, lineHeight: 1.5 }}>
-                <li><strong>Pieces:</strong> The basics. +10 capture, -10 loss.</li>
-                <li><strong>Kings:</strong> Mastery. High-value pieces (+15) with more range.</li>
-                <li><strong>Position:</strong> Future-proofing. Bonus for controlling key squares.</li>
-              </ul>
+            <div style={{ marginTop: 20, fontSize: 13, color: '#ccc', background: 'rgba(0,0,0,0.2)', padding: 15, borderRadius: 12 }}>
+              <strong><span style={{ color: '#fbc02d' }}>🎓</span> Strategy Guide:</strong>
+              <p style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5 }}>
+                In Minimax logic, a <strong>Positive (+12)</strong> score means the current player (usually You/Red) is winning. A <strong>Negative (-5)</strong> score means the opponent (Black Bot) has the advantage.
+              </p>
+              <p style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5 }}>
+                The Bot will always pick the path that leads to the <strong>Lowest possible score</strong> at the leaf nodes (since it wants to win), while it assumes You will pick the <strong>Highest</strong>.
+              </p>
             </div>
 
             <div style={{ marginTop: 30, fontSize: 13, background: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 8 }}>
@@ -538,6 +567,22 @@ function App() {
         </div>
         <div style={{ color: '#666' }}>Checkers Sim v1.2</div>
       </div>
+
+      <OnboardingTour
+        active={tourActive}
+        onComplete={() => {
+          setTourActive(false);
+          localStorage.setItem('checkers_tour_completed', 'true');
+        }}
+      />
+
+      {showExplainer && (
+        <AlgorithmExplainer
+          algo={algo}
+          onStart={finalizeStartGame}
+          onSkip={finalizeStartGame}
+        />
+      )}
     </div>
   );
 }
