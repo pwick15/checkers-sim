@@ -113,14 +113,30 @@ const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId }) =
                 <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`}>
                     {layout.links.map((l, i) => {
                         const inPath = highlightPath.has(l.target.id);
+                        const isBest = l.target.branch_rank !== undefined && l.target.branch_rank >= 0 && l.target.branch_rank < 3;
+
+                        let stroke = '#555';
+                        let width = 1;
+                        let opacity = 0.4;
+
+                        if (inPath) {
+                            stroke = '#00e676';
+                            width = 3;
+                            opacity = 1;
+                        } else if (isBest) {
+                            stroke = l.target.branch_rank === 0 ? '#00e676' : '#388e3c';
+                            width = 1.5;
+                            opacity = 0.7;
+                        }
+
                         return (
                             <line
                                 key={i}
                                 x1={l.source.x} y1={l.source.y}
                                 x2={l.target.x} y2={l.target.y}
-                                stroke={inPath ? '#00e676' : '#555'}
-                                strokeWidth={inPath ? 3 : 1}
-                                opacity={inPath ? 1 : 0.4}
+                                stroke={stroke}
+                                strokeWidth={width}
+                                opacity={opacity}
                             />
                         );
                     })}
@@ -128,7 +144,7 @@ const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId }) =
                     {layout.nodes.map((n, i) => {
                         const isHigh = n.id === highlightedId;
                         const inPath = highlightPath.has(n.id);
-                        const isTop = n.branch_rank !== undefined && n.branch_rank < 3;
+                        const isTop = n.branch_rank !== undefined && n.branch_rank >= 0 && n.branch_rank < 3;
 
                         let fill = '#444';
                         let r = 5;

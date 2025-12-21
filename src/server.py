@@ -167,32 +167,32 @@ async def get_bot_move(game_id: str):
             analysis_data = bot.get_analysis_data()
 
     executed_moves = []
+    intermediate_states = []
     
     if move:
         while True:
-            # Save state for undo (only once per turn? No, meaningful undo reverts the whole turn usually, 
-            # but our simple undo just pops one state. 
-            # If we push multiple states, user has to undo multiple times to back out of a double jump.
-            # This is acceptable for now.)
+            # Save state for undo
             game_data["history"].append(copy.deepcopy(game))
             
             game.play_move(move[0], move[1])
-            executed_moves.append(move)
+            executed_moves.append({"from": move[0], "to": move[1]})
+            # Store board state AFTER this hop
+            intermediate_states.append(serialize_board(game.board))
             
             game_data["last_move"] = {"from": move[0], "to": move[1], "is_bot": True}
             
             # Check if turn is still bot's (double jump available)
             if game.current_turn == 'black' and not game.is_over():
-                 # Bot must move again
                  move = bot.get_move(game)
                  if not move:
-                     break # Should not happen if game logic is correct
+                     break 
             else:
                 break
 
     return {
         "message": "Bot move successful",
-        "moves": executed_moves, # Return all steps
+        "moves": executed_moves, 
+        "intermediate_states": intermediate_states, # NEW
         "current_turn": game.current_turn,
         "winner": game.winner,
         "board": serialize_board(game.board),

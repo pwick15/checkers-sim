@@ -138,46 +138,82 @@ function App() {
   };
 
   const triggerBot = async () => {
-    setStatus("Reviewing options...");
+    setStatus("AI is simulating future moves to find the best strategy...");
     try {
       const res = await fetch(`/api/game/${gameId}/bot-move`, { method: 'POST' });
       const data = await res.json();
 
       if (data.analysis && data.analysis.nodes.length > 0) {
         setAnalysis(data.analysis);
-        startAnimation(data.analysis.nodes.length);
+        startAnimation(data.analysis.nodes.length, data.moves, data.intermediate_states);
       } else {
-        // Fallback
         await fetchState(gameId);
       }
     } catch (e) {
       console.error(e);
+      setStatus("Error in AI calculation");
     }
   };
 
-  const startAnimation = (total) => {
+  const startAnimation = (total, aiMoves, aiStates) => {
     setIsAnimating(true);
     setExploredCount(0);
 
+    const statuses = [
+      "Simulating future possibilities...",
+      "Analyzing opponent counter-moves...",
+      "Evaluating board control strategies...",
+      "Calculating optimal piece placement...",
+      "Predicting long-term outcomes..."
+    ];
+
     let current = 0;
     const animate = () => {
-      // Speed calc from REF
-      const s = speedRef.current || speed; // fallback
+      const s = speedRef.current || speed;
       const step = Math.ceil(total / 200 * s);
       current += step;
+
       if (current >= total) {
         current = total;
-        setIsAnimating(false);
-        fetchState(gameId);
-      }
-      setExploredCount(current);
-
-      if (current < total) {
+        setExploredCount(current);
+        setStatus("Best strategy identified. Executing...");
+        setTimeout(() => playAIMoves(aiMoves, aiStates), 300);
+      } else {
+        setExploredCount(current);
+        const statusIdx = Math.floor((current / total) * statuses.length);
+        setStatus(statuses[Math.min(statusIdx, statuses.length - 1)]);
         requestRef.current = requestAnimationFrame(animate);
       }
     };
 
     requestRef.current = requestAnimationFrame(animate);
+  };
+
+  const playAIMoves = async (moves, states) => {
+    try {
+      if (!moves || moves.length === 0 || !states || states.length === 0) {
+        return;
+      }
+
+      setStatus("AI moving piece...");
+      for (let i = 0; i < moves.length; i++) {
+        const move = moves[i];
+        const boardState = states[i];
+
+        if (move && move.from && move.to) {
+          setLastMove({ from: move.from, to: move.to, is_bot: true });
+          setDisplayBoard(boardState);
+          // Wait for visual hop
+          await new Promise(r => setTimeout(r, 800));
+        }
+      }
+    } catch (e) {
+      console.error("Error during AI move playback:", e);
+    } finally {
+      setIsAnimating(false);
+      setDisplayBoard(null); // Clear simulation board
+      await fetchState(gameId);
+    }
   };
 
   const handleUndo = async () => {
@@ -244,6 +280,17 @@ function App() {
             <div className="controls-bar" style={{ width: 480, marginTop: 20 }}>
               <button className="control-btn undo-btn" onClick={handleUndo}>Undo Last Move</button>
             </div>
+
+            {/* ANIMATION OVERLAY */}
+            {isAnimating && exploredCount > 0 && exploredCount < (analysis?.total_explored || 0) && (
+              <div className="animation-overlay">
+                <div style={{ color: '#fbc02d', fontWeight: 'bold', marginBottom: 5 }}>AI BRAINSTORMING</div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>{status}</div>
+                <div className="progress-bar-container">
+                  <div className="progress-bar" style={{ width: `${(exploredCount / (analysis?.total_explored || 1)) * 100}%` }}></div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* RIGHT: ANALYSIS */}
@@ -261,7 +308,12 @@ function App() {
                     const moveNode = analysis.nodes.find(n => n.id === m.visit_order);
 
                     return (
-                      <div key={i} className={`top-move-item rank-${i + 1}`}>
+                      <div
+                        key={i}
+                        className={`top-move-item rank-${i + 1}`}
+                        onMouseEnter={() => setHoveredNode(moveNode)}
+                        onMouseLeave={() => setHoveredNode(null)}
+                      >
                         <div className="move-info">
                           <div className="move-notation">Move {i + 1}: {fromNot} - {toNot}</div>
                           <div className="move-coords" style={{ fontSize: 10, opacity: 0.5 }}>
@@ -411,6 +463,9 @@ function App() {
 
             {explainerNode.score_breakdown ? (
               <div style={{ marginTop: 20 }}>
+                <div style={{ marginBottom: 15, fontStyle: 'italic', borderLeft: '3px solid #fbc02d', paddingLeft: 12, color: '#b0bec5', fontSize: 14 }}>
+                  <strong>The Balance Sheet Analogy:</strong> Think of this like a health checkup. "Pieces" are your current health, but "Position" is your fitness level. The AI selects moves that result in the highest combined "health and fitness" for itself!
+                </div>
                 {Object.entries(explainerNode.score_breakdown).map(([key, val]) => (
                   <div key={key} className="score-breakdown-row">
                     <span>{key}</span>
@@ -427,6 +482,15 @@ function App() {
                 This is an intermediate node. Its score ({explainerNode.score}) was inherited from its best-performing future outcome (Minimax).
               </p>
             )}
+
+            <div style={{ marginTop: 20, fontSize: 13, color: '#ccc', background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 8 }}>
+              <strong>Heuristic Guide (Strategy):</strong>
+              <ul style={{ marginTop: 5, paddingLeft: 18, lineHeight: 1.5 }}>
+                <li><strong>Pieces:</strong> The basics. +10 capture, -10 loss.</li>
+                <li><strong>Kings:</strong> Mastery. High-value pieces (+15) with more range.</li>
+                <li><strong>Position:</strong> Future-proofing. Bonus for controlling key squares.</li>
+              </ul>
+            </div>
 
             <div style={{ marginTop: 30, fontSize: 13, background: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 8 }}>
               <strong>Did you know?</strong> Positive scores favor Red (You), while negative scores favor Black (Bot). The AI always picks the path leading to the best future score!
@@ -458,6 +522,22 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* STATUS BAR */}
+      <div className="status-bar">
+        <div style={{ display: 'flex', gap: 20 }}>
+          <span><strong>DEBUG:</strong> AI Mode: {algo?.toUpperCase()}</span>
+          <span><strong>STATES EXPLORED:</strong> {exploredCount.toLocaleString()}</span>
+        </div>
+        <div>
+          {hoveredNode ? (
+            <span>Analyzing: Move from {getNotation(hoveredNode.move?.from[0], hoveredNode.move?.from[1])} | Score: <strong style={{ color: hoveredNode.score >= 0 ? '#4caf50' : '#f44336' }}>{hoveredNode.score}</strong></span>
+          ) : (
+            "Hover over a dot or move to see the AI's logic"
+          )}
+        </div>
+        <div style={{ color: '#666' }}>Checkers Sim v1.2</div>
+      </div>
     </div>
   );
 }
