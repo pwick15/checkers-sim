@@ -321,11 +321,7 @@ function App() {
         <div className="game-page">
           {/* LEFT: BOARD */}
           <div id="board-area">
-            <div id="board-header">
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button className="control-btn" onClick={() => setPage('landing')}>Exit</button>
-                <button className="control-btn" onClick={() => setTourActive(true)} title="Restart Tour">?</button>
-              </div>
+            <div id="board-header" style={{ width: 480, display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
               <div style={{ fontSize: 20, fontWeight: 'bold', color: currentTurn === 'red' ? '#e57373' : '#90caf9' }}>{status}</div>
             </div>
 
@@ -337,8 +333,12 @@ function App() {
               lastMove={lastMove}
             />
 
-            <div className="controls-bar" style={{ width: 480, marginTop: 20 }}>
-              <button className="control-btn undo-btn" onClick={handleUndo}>Undo Last Move</button>
+            <div className="controls-bar" style={{ width: 480, marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="control-btn" onClick={() => setPage('landing')}>Exit</button>
+                <button className="control-btn" onClick={() => setTourActive(true)} title="Restart Tour">?</button>
+              </div>
+              <button className="control-btn undo-btn" onClick={handleUndo} title="Undo Last Move" style={{ fontSize: '20px', padding: '4px 15px', lineHeight: 1 }}>⟲</button>
             </div>
 
             {/* ANIMATION OVERLAY */}
@@ -374,9 +374,6 @@ function App() {
                       >
                         <div className="move-info">
                           <div className="move-notation">Move {i + 1}: {fromNot} - {toNot}</div>
-                          <div className="move-coords" style={{ fontSize: 10, opacity: 0.5 }}>
-                            ({m.from_pos[0]},{m.from_pos[1]}) → ({m.to_pos[0]},{m.to_pos[1]})
-                          </div>
                         </div>
                         <div
                           className={`move-score ${m.score > 0 ? 'positive' : 'negative'} clickable-score`}
