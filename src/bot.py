@@ -244,6 +244,7 @@ class MinimaxBot(BotPlayer):
                  'to_pos': child.move[1],
                  'visit_order': child.visit_order,
                  'score_breakdown': child.score_breakdown,
+                 'board_state': child.board_state,
                  'pv': self._extract_pv(child) # NEW: future path
              })
              child.rank = i # Tag for grid coloring
