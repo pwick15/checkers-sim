@@ -53,8 +53,8 @@ const FutureMove = ({ move, label, theme }) => {
         <div className="mini-board-popup">
           <div style={{ fontSize: '10px', marginBottom: '4px', color: '#fbc02d' }}>State after {fromNot}-{toNot}</div>
           <MiniBoard board={move.board} lastMove={{ from: move.from, to: move.to }} theme={theme} />
-          <div style={{ fontSize: '10px', marginTop: '4px', opacity: 0.8 }}>
-            Score: {move.score > 0 ? '+' : ''}{move.score}
+          <div style={{ fontSize: '10px', marginTop: '4px', opacity: 0.8, color: move.score >= 0 ? '#e57373' : '#90caf9' }}>
+            Score: {move.score === 0 ? 'Even' : Math.abs(move.score)}
           </div>
         </div>
       )}
@@ -104,8 +104,14 @@ const CaptureTracker = ({ board }) => {
           </div>
         </div>
         {diff !== 0 && (
-          <div className="score-diff" style={{ fontSize: 14, fontWeight: 'bold', color: diff > 0 ? '#4caf50' : '#f44336' }}>
-            {diff > 0 ? `+${diff}` : diff}
+          <div className="score-diff" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: diff > 0 ? '#e57373' : '#90caf9'
+            }}></div>
+            <span style={{ fontSize: 14, fontWeight: 'bold', color: diff > 0 ? '#e57373' : '#90caf9' }}>
+              {Math.abs(diff)}
+            </span>
           </div>
         )}
         <div className="player-side" style={{ textAlign: 'right' }}>
@@ -435,7 +441,7 @@ function App() {
             {/* TOP MOVES CARD */}
             {analysis && analysis.top_moves.length > 0 && (
               <div className="analysis-card">
-                <div className="analysis-header">Top Candidates</div>
+                <div className="analysis-header" style={{ color: '#fbc02d' }}>AI Strategy Analysis</div>
                 <div className="top-moves-list">
                   {analysis.top_moves.map((m, i) => {
                     const rankLabel = ["Best Move", "2nd Best", "3rd Best"][i] || `Move ${i + 1}`;
@@ -468,13 +474,14 @@ function App() {
                           </div>
                         </div>
                         <div
-                          className={`move-score ${m.score > 0 ? 'positive' : 'negative'} clickable-score`}
-                          title={m.score_breakdown ?
-                            Object.entries(m.score_breakdown).map(([k, v]) => `${k}: ${v}`).join(', ') :
-                            "Click for details"}
-                          onClick={() => setExplainerNode(m)}
+                          className={`move-score clickable-score`}
+                          style={{ color: m.score >= 0 ? '#e57373' : '#90caf9', fontWeight: 'bold' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExplainerNode(m);
+                          }}
                         >
-                          {m.score > 0 ? '+' : ''}{m.score}
+                          {m.score === 0 ? '0' : Math.abs(m.score)}
                         </div>
                       </div>
                     );
@@ -613,55 +620,80 @@ function App() {
                 {/* ADVANTAGE HUD */}
                 <div style={{ textAlign: 'center', marginBottom: 25 }}>
                   <div style={{ fontSize: 12, color: '#aaa', textTransform: 'uppercase', letterSpacing: '1px' }}>Current Prediction</div>
-                  <div style={{ fontSize: 32, fontWeight: 'bold', color: explainerNode.score >= 0 ? '#4caf50' : '#f44336' }}>
-                    {explainerNode.score > 0 ? "YOU" : "AI"} {explainerNode.score >= 0 ? '+' : ''}{explainerNode.score}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                    <div style={{ width: 12, height: 12, borderRadius: '50%', background: explainerNode.score >= 0 ? '#e57373' : '#90caf9' }}></div>
+                    <div style={{ fontSize: 32, fontWeight: 'bold', color: explainerNode.score >= 0 ? '#e57373' : '#90caf9' }}>
+                      {explainerNode.score === 0 ? "EVEN" : Math.abs(explainerNode.score)}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>
+                    {explainerNode.score > 0 ? "Red Advantage" : explainerNode.score < 0 ? "Black Advantage" : "Dynamic Equilibrium"}
                   </div>
                 </div>
 
-                {/* VISUAL BREAKDOWN CARDS */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 25 }}>
-                  <div className="explainer-card-mini">
-                    <div className="icon">♟️</div>
-                    <div className="label">Material</div>
-                    <div className="val">{explainerNode.score_breakdown.Pieces || 0}</div>
+                <div className="explainer-main-content" style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 20 }}>
+                  {/* LEFT: TARGET BOARD */}
+                  <div className="target-board-column">
+                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 8, textAlign: 'center' }}>STRATEGIC OUTCOME</div>
+                    <div style={{ padding: 10, background: '#000', borderRadius: 8, border: '1px solid #333' }}>
+                      <MiniBoard board={explainerNode.board_state} theme={theme} />
+                    </div>
+                    <p style={{ fontSize: 10, color: '#666', marginTop: 8, textAlign: 'center', lineHeight: 1.4 }}>
+                      The AI predicts this board state will be reached if both players play optimally from here.
+                    </p>
                   </div>
-                  <div className="explainer-card-mini">
-                    <div className="icon">👑</div>
-                    <div className="label">Kings</div>
-                    <div className="val">{explainerNode.score_breakdown.Kings || 0}</div>
-                  </div>
-                  <div className="explainer-card-mini">
-                    <div className="icon">🛡️</div>
-                    <div className="label">Safety</div>
-                    <div className="val">{explainerNode.score_breakdown.Position || 0}</div>
-                  </div>
-                </div>
 
-                {/* DETAILED EXPLAINER */}
-                <div className="detailed-math-box">
-                  <div className="math-row">
-                    <div className="math-label">
-                      <strong>Material Advantage</strong>
-                      <p>Counts base pieces. Red is +10 each, Black is -10 each. This is the raw weight of your army.</p>
+                  {/* RIGHT: MATH */}
+                  <div className="math-column">
+                    {/* VISUAL BREAKDOWN CARDS */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 25 }}>
+                      <div className="explainer-card-mini">
+                        <div className="icon">♟️</div>
+                        <div className="label">Material</div>
+                        <div className="val-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: (explainerNode.score_breakdown.Pieces || 0) >= 0 ? '#e57373' : '#90caf9' }}></div>
+                          <div className="val">{Math.abs(explainerNode.score_breakdown.Pieces || 0)}</div>
+                        </div>
+                      </div>
+                      <div className="explainer-card-mini">
+                        <div className="icon">👑</div>
+                        <div className="label">Kings</div>
+                        <div className="val-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: (explainerNode.score_breakdown.Kings || 0) >= 0 ? '#e57373' : '#90caf9' }}></div>
+                          <div className="val">{Math.abs(explainerNode.score_breakdown.Kings || 0)}</div>
+                        </div>
+                      </div>
+                      <div className="explainer-card-mini">
+                        <div className="icon">🛡️</div>
+                        <div className="label">Safety</div>
+                        <div className="val-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: (explainerNode.score_breakdown.Position || 0) >= 0 ? '#e57373' : '#90caf9' }}></div>
+                          <div className="val">{Math.abs(explainerNode.score_breakdown.Position || 0)}</div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="math-row">
-                    <div className="math-label">
-                      <strong>King Powerups</strong>
-                      <p>Kings gain +5 bonus value (total 15) because they can move backwards and "patrol" the board.</p>
-                    </div>
-                  </div>
-                  <div className="math-row">
-                    <div className="math-label">
-                      <strong>Edge & Home row Safety</strong>
-                      <p>Pieces on the edges or the back row are harder to jump. The AI rewards this stability.</p>
+
+                    {/* DETAILED EXPLAINER */}
+                    <div className="detailed-math-box">
+                      <div className="math-row">
+                        <div className="math-label">
+                          <strong>Heuristic Breakdown</strong>
+                          <p>The numbers above show the components of the <strong>Strategic Outcome</strong> board on the left. Red dots indicate Red lead, Blue dots indicate Black lead.</p>
+                        </div>
+                      </div>
+                      <div className="math-row">
+                        <div className="math-label">
+                          <strong>Calculation</strong>
+                          <p><code>Score = (Red Material + Red Safety) - (Black Material + Black Safety)</code></p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="analogy-box" style={{ marginTop: 20 }}>
-                  <strong>The "Tug of War":</strong> The AI sees Red as <strong>positive (+)</strong> and Black as <strong>negative (-)</strong>.
-                  Every point you gain pulls the score towards victory!
+                  <strong>The "Tug of War":</strong> The AI sees Red as <strong>advantage (+)</strong> and Black as <strong>advantage (-)</strong>.
+                  Every move is evaluated based on how much it pulls the final state towards your side.
                 </div>
               </div>
             ) : (

@@ -17,13 +17,15 @@ class DecisionNode:
     def __init__(self, move, score=None, children=None):
         self.move = move
         self.score = score
-        self.score_breakdown = None # NEW: Detailed stats for leaf nodes
         self.children = children if children is not None else []
-        self.visit_order = None  # NEW: sequence in DFS traversal
-        self.is_pruned = False   # NEW: alpha-beta pruning flag
-        self.depth = 0           # NEW: depth in tree (0 = root)
-        self.board_state = None  # NEW: optional simplified board state
-        self.best_child = None   # NEW: track best path
+        self.visit_order = None
+        self.is_pruned = False
+        self.depth = 0
+        self.board_state = None      # Board state IMMEDIATELY after this move
+        self.score_breakdown = None # Breakdown of the IMMEDIATE state
+        self.predicted_board = None  # Board state at the end of the best predicted path
+        self.predicted_breakdown = None # Breakdown of the strategic outcome
+        self.best_child = None       # track best path
 
 class BotPlayer(ABC):
     """Abstract base class for bot players."""
@@ -71,8 +73,9 @@ class BotPlayer(ABC):
                 'from': child.move[0] if child.move else None,
                 'to': child.move[1] if child.move else None,
                 'score': child.score,
-                'board': child.board_state,
-                'score_breakdown': child.score_breakdown
+                'board': child.board_state, # Intermediate board after this step
+                'predicted_board': child.predicted_board, # Deepest board
+                'score_breakdown': child.score_breakdown # This is immediate breakdown
             })
             curr = child
         return pv
@@ -228,9 +231,11 @@ class MinimaxBot(BotPlayer):
         # 1. Identify Top Moves
         # Sort children by score descending
         children = self.last_decision_tree.children
+        # Sort by desirability for the bot's color
+        is_red = (self.color == 'red')
         sorted_children = sorted(children, 
-                               key=lambda n: n.score if n.score is not None else float('-inf'), 
-                               reverse=True)
+                               key=lambda n: n.score if n.score is not None else (float('-inf') if is_red else float('inf')), 
+                               reverse=is_red)
         
         top_moves = []
         for i, child in enumerate(sorted_children[:3]):
@@ -243,9 +248,11 @@ class MinimaxBot(BotPlayer):
                  'from_pos': child.move[0],
                  'to_pos': child.move[1],
                  'visit_order': child.visit_order,
-                 'score_breakdown': child.score_breakdown,
-                 'board_state': child.board_state,
-                 'pv': self._extract_pv(child) # NEW: future path
+                 'score_breakdown': child.score_breakdown, # Immediate
+                 'board_state': child.board_state, # Immediate
+                 'predicted_board': child.predicted_board, # Strategic
+                 'predicted_breakdown': child.predicted_breakdown, # Strategic
+                 'pv': self._extract_pv(child) 
              })
              child.rank = i # Tag for grid coloring
 
@@ -358,6 +365,8 @@ class MinimaxBot(BotPlayer):
             eval_data = self._minimax(game_copy, self.depth - 1, next_is_max, move_node)
             score = eval_data['score']
             move_node.score = score
+            move_node.predicted_board = eval_data['board']
+            move_node.predicted_breakdown = eval_data['breakdown']
 
             if self.color == 'red':
                 if score > best_score:
@@ -400,7 +409,14 @@ class MinimaxBot(BotPlayer):
 
         # Base case: depth 0 or game over
         if depth == 0 or game.is_over():
-            return self._evaluate_board(game)
+            eval_res = self._evaluate_board(game)
+            return {
+                'score': eval_res['score'],
+                'breakdown': eval_res['breakdown'],
+                'board': self._serialize_board(game.board)
+            }
+
+        best_meta = None
 
         if is_maximizing:
             # Red's turn (Maximizer)
@@ -424,20 +440,27 @@ class MinimaxBot(BotPlayer):
                                 child_node = None
 
                             # Next turn is Black (Minimizer)
-                            eval_data = self._minimax(game_copy, depth - 1, False, child_node)
-                            score = eval_data['score']
-                            
+                            res = self._minimax(game_copy, depth - 1, False, child_node)
+                            score = res['score']
                             if child_node:
                                 child_node.score = score
-
+                                child_node.predicted_breakdown = res['breakdown']
+                                child_node.predicted_board = res['board']
+                            
                             if score > max_score:
                                 max_score = score
+                                best_meta = res
                                 if parent_node:
                                     parent_node.best_child = child_node
 
             if max_score == float('-inf'):
-                return self._evaluate_board(game)
-            return {'score': max_score}
+                eval_res = self._evaluate_board(game)
+                return {
+                    'score': eval_res['score'],
+                    'breakdown': eval_res['breakdown'],
+                    'board': self._serialize_board(game.board)
+                }
+            return best_meta
         else:
             # Black's turn (Minimizer)
             min_score = float('inf')
@@ -460,20 +483,27 @@ class MinimaxBot(BotPlayer):
                                 child_node = None
 
                             # Next turn is Red (Maximizer)
-                            eval_data = self._minimax(game_copy, depth - 1, True, child_node)
-                            score = eval_data['score']
-                            
+                            res = self._minimax(game_copy, depth - 1, True, child_node)
+                            score = res['score']
                             if child_node:
                                 child_node.score = score
+                                child_node.predicted_breakdown = res['breakdown']
+                                child_node.predicted_board = res['board']
 
                             if score < min_score:
                                 min_score = score
+                                best_meta = res
                                 if parent_node:
                                     parent_node.best_child = child_node
 
             if min_score == float('inf'):
-                return self._evaluate_board(game)
-            return {'score': min_score}
+                eval_res = self._evaluate_board(game)
+                return {
+                    'score': eval_res['score'],
+                    'breakdown': eval_res['breakdown'],
+                    'board': self._serialize_board(game.board)
+                }
+            return best_meta
 
     def _evaluate_board(self, game):
         """
@@ -575,6 +605,8 @@ class AlphaBetaBot(MinimaxBot):
             eval_data = self._alpha_beta(game_copy, self.depth - 1, alpha, beta, next_is_max, move_node)
             score = eval_data['score']
             move_node.score = score
+            move_node.predicted_breakdown = eval_data['breakdown']
+            move_node.predicted_board = eval_data['board']
 
             if self.color == 'red':
                 if score > best_score:
@@ -617,7 +649,14 @@ class AlphaBetaBot(MinimaxBot):
             parent_node.board_state = self._serialize_board(game.board)
 
         if depth == 0 or game.is_over():
-            return self._evaluate_board(game)
+            eval_res = self._evaluate_board(game)
+            return {
+                'score': eval_res['score'],
+                'breakdown': eval_res['breakdown'],
+                'board': self._serialize_board(game.board)
+            }
+
+        best_meta = None
 
         if is_maximizing:
             # Red's turn (Maximizer)
@@ -646,12 +685,15 @@ class AlphaBetaBot(MinimaxBot):
                 game_copy.play_move(child.move[0], child.move[1])
                 
                 # Next turn is Black (Minimizer)
-                eval_data = self._alpha_beta(game_copy, depth - 1, alpha, beta, False, child)
-                score = eval_data['score']
+                res = self._alpha_beta(game_copy, depth - 1, alpha, beta, False, child)
+                score = res['score']
                 child.score = score
+                child.predicted_breakdown = res['breakdown']
+                child.predicted_board = res['board']
                 
                 if score > max_score:
                     max_score = score
+                    best_meta = res
                     if parent_node:
                         parent_node.best_child = child
                 
@@ -663,11 +705,16 @@ class AlphaBetaBot(MinimaxBot):
                         sibling_to_prune.is_pruned = True
                         sibling_to_prune.visit_order = self.visit_counter
                         self.visit_counter += 1
-                    return {'score': max_score}
-
+                    return best_meta if best_meta else res
+            
             if max_score == float('-inf'):
-                return self._evaluate_board(game)
-            return {'score': max_score}
+                eval_res = self._evaluate_board(game)
+                return {
+                    'score': eval_res['score'],
+                    'breakdown': eval_res['breakdown'],
+                    'board': self._serialize_board(game.board)
+                }
+            return best_meta
         else: 
             # Black's turn (Minimizer)
             min_score = float('inf')
@@ -681,7 +728,7 @@ class AlphaBetaBot(MinimaxBot):
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
                             moves.append(((r, c), end_pos))
-
+            
             children = []
             if parent_node:
                 for move in moves:
@@ -695,12 +742,15 @@ class AlphaBetaBot(MinimaxBot):
                 game_copy.play_move(child.move[0], child.move[1])
                 
                 # Next turn is Red (Maximizer)
-                eval_data = self._alpha_beta(game_copy, depth - 1, alpha, beta, True, child)
-                score = eval_data['score']
+                res = self._alpha_beta(game_copy, depth - 1, alpha, beta, True, child)
+                score = res['score']
                 child.score = score
+                child.predicted_breakdown = res['breakdown']
+                child.predicted_board = res['board']
                 
                 if score < min_score:
                     min_score = score
+                    best_meta = res
                     if parent_node:
                         parent_node.best_child = child
                 
@@ -712,8 +762,13 @@ class AlphaBetaBot(MinimaxBot):
                         sibling_to_prune.is_pruned = True
                         sibling_to_prune.visit_order = self.visit_counter
                         self.visit_counter += 1
-                    return {'score': min_score}
+                    return best_meta if best_meta else res
 
             if min_score == float('inf'):
-                return self._evaluate_board(game)
-            return {'score': min_score}
+                eval_res = self._evaluate_board(game)
+                return {
+                    'score': eval_res['score'],
+                    'breakdown': eval_res['breakdown'],
+                    'board': self._serialize_board(game.board)
+                }
+            return best_meta

@@ -37,6 +37,11 @@
     border-color: #d5c4a1;
 }
 
+.app-container.light-theme .mini-board-popup {
+    background: #fdf6e3;
+    border-color: #d5c4a1;
+}
+
 .landing-page {
     /* Inherits centered flex from index.css logic or define here */
     width: 100%;
@@ -276,22 +281,44 @@
     background: #2a303e;
 }
 
-/* Light Theme Mini Grid */
+/* Light Theme Mini Grid Sync */
 .mini-grid.light .mini-square.dark {
-    background: #8b5a2b;
+    background: #8b5a2b !important;
 }
 
 .mini-grid.light .mini-square.light {
-    background: #f6e9d5;
+    background: #f6e9d5 !important;
 }
 
 .mini-grid.light .mini-piece.black {
-    background: #1c1c1c;
-    border-color: #000;
+    background: #1c1c1c !important;
+    border: 1px solid #000 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5) !important;
 }
 
 .mini-grid.light .mini-piece.red {
-    background: #d63c24;
+    background: #d63c24 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Dark Theme Mini Grid Sync */
+.mini-grid.dark .mini-square.dark {
+    background: #1a1e26 !important;
+}
+
+.mini-grid.dark .mini-square.light {
+    background: #2a303e !important;
+}
+
+.mini-grid.dark .mini-piece.black {
+    background: #333 !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.5) !important;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.8), 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+}
+
+.mini-grid.dark .mini-piece.red {
+    background: #e57373 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5) !important;
 }
 
 .mini-piece {
@@ -299,6 +326,11 @@
     height: 14px;
     border-radius: 50%;
     margin: 2px;
+    box-sizing: border-box;
+}
+
+.mini-piece.king {
+    border: 2px solid #fbc02d !important;
 }
 
 /* Scoring Explainer Enhancements */

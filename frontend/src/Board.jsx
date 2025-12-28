@@ -17,7 +17,7 @@ const DARK_COLORS = {
     boardLight: "#2a303e",
     boardDark: "#1a1e26",
     redPiece: "#e57373",
-    blackPiece: "#222",
+    blackPiece: "#333", // Slightly lighter for better visibility
     king: "#fbc02d",
     validMove: "rgba(46, 125, 50, 0.4)",
     selected: "rgba(251, 192, 45, 0.3)",
@@ -109,11 +109,22 @@ export default function Board({ board, validMoves = [], selectedPiece, lastMove,
         const radius = SQUARE_SIZE / 2 - 6;
 
         ctx.fillStyle = piece.color === 'red' ? COLORS.redPiece : COLORS.blackPiece;
+
+        // Add subtle stroke for black pieces in dark mode to make them pop
+        if (piece.color === 'black' && theme === 'dark') {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 2;
+        } else {
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.lineWidth = 1;
+        }
+
         ctx.shadowColor = 'rgba(0,0,0,0.5)';
         ctx.shadowBlur = 4;
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke(); // Add stroke
         ctx.shadowBlur = 0;
 
         if (piece.is_king) {
