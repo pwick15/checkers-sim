@@ -12,10 +12,10 @@ const getNotation = (r, c) => {
   return (r * 4) + Math.floor(c / 2) + 1;
 };
 
-const MiniBoard = ({ board, lastMove }) => {
+const MiniBoard = ({ board, lastMove, theme = 'dark' }) => {
   if (!board) return null;
   return (
-    <div className="mini-grid">
+    <div className={`mini-grid ${theme}`}>
       {board.map((row, r) =>
         row.map((piece, c) => {
           const isFrom = lastMove && lastMove.from[0] === r && lastMove.from[1] === c;
@@ -37,7 +37,7 @@ const MiniBoard = ({ board, lastMove }) => {
   );
 };
 
-const FutureMove = ({ move, label }) => {
+const FutureMove = ({ move, label, theme }) => {
   const [hover, setHover] = useState(false);
   const fromNot = getNotation(move.from[0], move.from[1]);
   const toNot = getNotation(move.to[0], move.to[1]);
@@ -52,7 +52,7 @@ const FutureMove = ({ move, label }) => {
       {hover && move.board && (
         <div className="mini-board-popup">
           <div style={{ fontSize: '10px', marginBottom: '4px', color: '#fbc02d' }}>State after {fromNot}-{toNot}</div>
-          <MiniBoard board={move.board} lastMove={{ from: move.from, to: move.to }} />
+          <MiniBoard board={move.board} lastMove={{ from: move.from, to: move.to }} theme={theme} />
           <div style={{ fontSize: '10px', marginTop: '4px', opacity: 0.8 }}>
             Score: {move.score > 0 ? '+' : ''}{move.score}
           </div>
@@ -146,6 +146,7 @@ function App() {
   // Let's stick to the linear exploration viz for now as it matches "Exploration Order".
 
   // Viz State
+  const [theme, setTheme] = useState('dark');
   const [isAnimating, setIsAnimating] = useState(false);
   const [exploredCount, setExploredCount] = useState(0);
   const [hoveredNode, setHoveredNode] = useState(null); // Inspecting
@@ -360,7 +361,7 @@ function App() {
   // For now, let's keep it simple: Show details in tooltip.
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${theme}-theme`}>
 
       {/* LANDING PAGE reuse existing HTML structure or Component if desired */}
       {page === 'landing' && (
@@ -397,12 +398,20 @@ function App() {
               selectedPiece={selectedPiece}
               onSquareClick={handleSquareClick}
               lastMove={lastMove}
+              theme={theme}
             />
 
             <div className="controls-bar" style={{ width: 480, marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="control-btn" onClick={() => setPage('landing')}>Exit</button>
                 <button className="control-btn icon-btn" onClick={handleUndo} title="Undo Last Move">⟲</button>
+                <button className="control-btn icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Toggle Theme">
+                  {theme === 'dark' ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
+                  )}
+                </button>
                 <button className="control-btn icon-btn" onClick={() => setTourActive(true)} title="Restart Tour">?</button>
               </div>
             </div>
@@ -435,7 +444,7 @@ function App() {
                       <div
                         key={i}
                         className={`top-move-item rank-${i + 1}`}
-                        onMouseEnter={() => setHoveredNode(m)}
+                        onMouseEnter={() => setHoveredNode({ ...m, fromList: true })}
                         onMouseLeave={() => setHoveredNode(null)}
                       >
                         <div className="move-info">
@@ -443,13 +452,14 @@ function App() {
                           <div className="move-sequence">
                             <FutureMove
                               move={{ from: m.from_pos, to: m.to_pos, board: m.board_state, score: m.score }}
+                              theme={theme}
                             />
                             {m.pv && m.pv.length > 0 && (
                               <>
                                 <span style={{ fontSize: 10, color: '#666', display: 'flex', alignItems: 'center', margin: '0 2px' }}>→</span>
                                 {m.pv.map((step, idx) => (
                                   <React.Fragment key={idx}>
-                                    <FutureMove move={step} />
+                                    <FutureMove move={step} theme={theme} />
                                     {idx < m.pv.length - 1 && <span style={{ fontSize: 10, color: '#666', display: 'flex', alignItems: 'center', margin: '0 2px' }}>→</span>}
                                   </React.Fragment>
                                 ))}
@@ -531,7 +541,7 @@ function App() {
                 </div>
 
                 {/* TOOLTIP OVERLAY */}
-                {hoveredNode && (
+                {hoveredNode && !hoveredNode.fromList && (
                   <div className="inspector-tooltip" style={{ bottom: 10, left: 10, pointerEvents: 'auto', cursor: 'pointer' }}
                     onClick={() => {
                       if (hoveredNode.is_pruned) setPruneExplain(true);

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 
 const SQUARE_SIZE = 480 / 8;
-const COLORS = {
+const LIGHT_COLORS = {
     boardLight: "#f6e9d5",
     boardDark: "#8b5a2b",
     redPiece: "#d63c24",
@@ -13,7 +13,20 @@ const COLORS = {
     lastMove: "rgba(255, 235, 59, 0.3)"
 };
 
-export default function Board({ board, validMoves = [], selectedPiece, lastMove, onSquareClick }) {
+const DARK_COLORS = {
+    boardLight: "#2a303e",
+    boardDark: "#1a1e26",
+    redPiece: "#e57373",
+    blackPiece: "#222",
+    king: "#fbc02d",
+    validMove: "rgba(46, 125, 50, 0.4)",
+    selected: "rgba(251, 192, 45, 0.3)",
+    dragSource: "rgba(255, 255, 255, 0.1)",
+    lastMove: "rgba(251, 192, 45, 0.2)"
+};
+
+export default function Board({ board, validMoves = [], selectedPiece, lastMove, theme = 'dark', onSquareClick }) {
+    const COLORS = theme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
     const canvasRef = useRef(null);
     const [dragging, setDragging] = useState(null); // { r, c, x, y }
 
@@ -90,7 +103,7 @@ export default function Board({ board, validMoves = [], selectedPiece, lastMove,
             drawPiece(ctx, dragging.piece, dragging.x, dragging.y);
         }
 
-    }, [board, validMoves, selectedPiece, dragging]);
+    }, [board, validMoves, selectedPiece, dragging, theme]);
 
     function drawPiece(ctx, piece, x, y) {
         const radius = SQUARE_SIZE / 2 - 6;
