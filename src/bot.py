@@ -23,6 +23,7 @@ class DecisionNode:
         self.is_pruned = False   # NEW: alpha-beta pruning flag
         self.depth = 0           # NEW: depth in tree (0 = root)
         self.board_state = None  # NEW: optional simplified board state
+        self.best_child = None   # NEW: track best path
 
 class BotPlayer(ABC):
     """Abstract base class for bot players."""
@@ -57,14 +58,24 @@ class BotPlayer(ABC):
     def get_move(self, game):
         """
         Get the bot's next move.
-
-        Args:
-            game (Game): The current game state
-
-        Returns:
-            tuple: ((start_row, start_col), (end_row, end_col)) or None if no moves
         """
         pass
+
+    def _extract_pv(self, start_node, depth_limit=4):
+        """Helper to extract the Principal Variation (best path) from a node."""
+        pv = []
+        curr = start_node
+        while curr and curr.best_child and len(pv) < depth_limit:
+            child = curr.best_child
+            pv.append({
+                'from': child.move[0] if child.move else None,
+                'to': child.move[1] if child.move else None,
+                'score': child.score,
+                'board': child.board_state,
+                'score_breakdown': child.score_breakdown
+            })
+            curr = child
+        return pv
 
     def get_all_possible_moves(self, game):
         """
@@ -232,7 +243,8 @@ class MinimaxBot(BotPlayer):
                  'from_pos': child.move[0],
                  'to_pos': child.move[1],
                  'visit_order': child.visit_order,
-                 'score_breakdown': child.score_breakdown
+                 'score_breakdown': child.score_breakdown,
+                 'pv': self._extract_pv(child) # NEW: future path
              })
              child.rank = i # Tag for grid coloring
 
@@ -314,7 +326,7 @@ class MinimaxBot(BotPlayer):
         self.nodes_explored = 0
         self.visit_counter = 0
         best_move = None
-        best_score = float('-inf')
+        best_score = float('-inf') if self.color == 'red' else float('inf')
 
         # Root of the decision tree for this move
         self.last_decision_tree = DecisionNode(None)
@@ -339,14 +351,23 @@ class MinimaxBot(BotPlayer):
             move_node.depth = 1
             self.last_decision_tree.children.append(move_node)
 
-            # Get score for this move
-            eval_data = self._minimax(game_copy, self.depth - 1, False, move_node)
+            # Get score for this move. The NEXT turn determines if maximizing.
+            # If current bot is Black, next turn (Red) is Maximizing.
+            next_is_max = (game_copy.current_turn == 'red')
+            eval_data = self._minimax(game_copy, self.depth - 1, next_is_max, move_node)
             score = eval_data['score']
             move_node.score = score
 
-            if score > best_score:
-                best_score = score
-                best_move = (start_pos, end_pos)
+            if self.color == 'red':
+                if score > best_score:
+                    best_score = score
+                    best_move = (start_pos, end_pos)
+                    self.last_decision_tree.best_child = move_node
+            else: # Black bot (Minimizer)
+                if score < best_score:
+                    best_score = score
+                    best_move = (start_pos, end_pos)
+                    self.last_decision_tree.best_child = move_node
         
         # Mark the root score
         self.last_decision_tree.score = best_score
@@ -381,20 +402,19 @@ class MinimaxBot(BotPlayer):
             return self._evaluate_board(game)
 
         if is_maximizing:
-            # Maximizing player (bot)
+            # Red's turn (Maximizer)
             max_score = float('-inf')
 
-            # Get all moves for bot's color
+            # Get all moves for Red
             for r in range(8):
                 for c in range(8):
                     piece = game.board.get_piece(r, c)
-                    if piece and piece.color == self.color:
+                    if piece and piece.color == 'red':
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
                             game_copy = self._copy_game(game)
                             game_copy.play_move((r, c), end_pos)
                             
-                            # Create child node if tracking
                             if parent_node is not None:
                                 child_node = DecisionNode(((r, c), end_pos))
                                 child_node.depth = parent_node.depth + 1
@@ -402,33 +422,35 @@ class MinimaxBot(BotPlayer):
                             else:
                                 child_node = None
 
+                            # Next turn is Black (Minimizer)
                             eval_data = self._minimax(game_copy, depth - 1, False, child_node)
                             score = eval_data['score']
                             
                             if child_node:
                                 child_node.score = score
 
-                            max_score = max(max_score, score)
+                            if score > max_score:
+                                max_score = score
+                                if parent_node:
+                                    parent_node.best_child = child_node
 
             if max_score == float('-inf'):
                 return self._evaluate_board(game)
             return {'score': max_score}
         else:
-            # Minimizing player (opponent)
+            # Black's turn (Minimizer)
             min_score = float('inf')
-            opponent_color = 'black' if self.color == 'red' else 'red'
 
-            # Get all moves for opponent's color
+            # Get all moves for Black
             for r in range(8):
                 for c in range(8):
                     piece = game.board.get_piece(r, c)
-                    if piece and piece.color == opponent_color:
+                    if piece and piece.color == 'black':
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
                             game_copy = self._copy_game(game)
                             game_copy.play_move((r, c), end_pos)
 
-                            # Create child node if tracking
                             if parent_node is not None:
                                 child_node = DecisionNode(((r, c), end_pos))
                                 child_node.depth = parent_node.depth + 1
@@ -436,13 +458,17 @@ class MinimaxBot(BotPlayer):
                             else:
                                 child_node = None
 
+                            # Next turn is Red (Maximizer)
                             eval_data = self._minimax(game_copy, depth - 1, True, child_node)
                             score = eval_data['score']
                             
                             if child_node:
                                 child_node.score = score
 
-                            min_score = min(min_score, score)
+                            if score < min_score:
+                                min_score = score
+                                if parent_node:
+                                    parent_node.best_child = child_node
 
             if min_score == float('inf'):
                 return self._evaluate_board(game)
@@ -466,7 +492,6 @@ class MinimaxBot(BotPlayer):
             'Kings': 0,
             'Position': 0
         }
-        opponent_color = 'black' if self.color == 'red' else 'red'
 
         for r in range(8):
             for c in range(8):
@@ -478,7 +503,8 @@ class MinimaxBot(BotPlayer):
                     # Position bonus
                     pos_bonus = (7 - r) if piece.color == 'red' else r
                     
-                    multiplier = 1 if piece.color == self.color else -1
+                    # RED-CENTRIC EVALUATION: Red is Positive, Black is Negative
+                    multiplier = 1 if piece.color == 'red' else -1
                     
                     if piece.is_king:
                         breakdown['Kings'] += (15 * multiplier)
@@ -517,7 +543,7 @@ class AlphaBetaBot(MinimaxBot):
         self.nodes_explored = 0
         self.visit_counter = 0
         best_move = None
-        best_score = float('-inf')
+        best_score = float('-inf') if self.color == 'red' else float('inf')
         alpha = float('-inf')
         beta = float('inf')
 
@@ -543,16 +569,25 @@ class AlphaBetaBot(MinimaxBot):
             move_node.depth = 1
             self.last_decision_tree.children.append(move_node)
 
-            eval_data = self._alpha_beta(game_copy, self.depth - 1, alpha, beta, False, move_node)
+            # Next turn determines if maximizing
+            next_is_max = (game_copy.current_turn == 'red')
+            eval_data = self._alpha_beta(game_copy, self.depth - 1, alpha, beta, next_is_max, move_node)
             score = eval_data['score']
             move_node.score = score
 
-            if score > best_score:
-                best_score = score
-                best_move = (start_pos, end_pos)
+            if self.color == 'red':
+                if score > best_score:
+                    best_score = score
+                    best_move = (start_pos, end_pos)
+                    self.last_decision_tree.best_child = move_node
+                alpha = max(alpha, best_score)
+            else: # Black bot (Minimizer)
+                if score < best_score:
+                    best_score = score
+                    best_move = (start_pos, end_pos)
+                    self.last_decision_tree.best_child = move_node
+                beta = min(beta, best_score)
 
-            alpha = max(alpha, best_score)
-        
         self.last_decision_tree.score = best_score
         return best_move
 
@@ -584,14 +619,15 @@ class AlphaBetaBot(MinimaxBot):
             return self._evaluate_board(game)
 
         if is_maximizing:
+            # Red's turn (Maximizer)
             max_score = float('-inf')
 
-            # Generate all child nodes first to handle pruning visualization
+            # Generate all child nodes
             moves = []
             for r in range(8):
                 for c in range(8):
                     piece = game.board.get_piece(r, c)
-                    if piece and piece.color == self.color:
+                    if piece and piece.color == 'red':
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
                             moves.append(((r, c), end_pos))
@@ -608,15 +644,19 @@ class AlphaBetaBot(MinimaxBot):
                 game_copy = self._copy_game(game)
                 game_copy.play_move(child.move[0], child.move[1])
                 
+                # Next turn is Black (Minimizer)
                 eval_data = self._alpha_beta(game_copy, depth - 1, alpha, beta, False, child)
                 score = eval_data['score']
                 child.score = score
                 
-                max_score = max(max_score, score)
+                if score > max_score:
+                    max_score = score
+                    if parent_node:
+                        parent_node.best_child = child
+                
                 alpha = max(alpha, score)
-
                 if beta <= alpha:
-                    # Prune: Mark remaining siblings as pruned
+                    # Prune
                     for j in range(i + 1, len(children)):
                         sibling_to_prune = children[j]
                         sibling_to_prune.is_pruned = True
@@ -627,15 +667,16 @@ class AlphaBetaBot(MinimaxBot):
             if max_score == float('-inf'):
                 return self._evaluate_board(game)
             return {'score': max_score}
-        else: # Minimizing
+        else: 
+            # Black's turn (Minimizer)
             min_score = float('inf')
-            opponent_color = 'black' if self.color == 'red' else 'red'
 
+            # Generate all child nodes
             moves = []
             for r in range(8):
                 for c in range(8):
                     piece = game.board.get_piece(r, c)
-                    if piece and piece.color == opponent_color:
+                    if piece and piece.color == 'black':
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
                             moves.append(((r, c), end_pos))
@@ -652,21 +693,26 @@ class AlphaBetaBot(MinimaxBot):
                 game_copy = self._copy_game(game)
                 game_copy.play_move(child.move[0], child.move[1])
                 
+                # Next turn is Red (Maximizer)
                 eval_data = self._alpha_beta(game_copy, depth - 1, alpha, beta, True, child)
                 score = eval_data['score']
                 child.score = score
                 
-                min_score = min(min_score, score)
+                if score < min_score:
+                    min_score = score
+                    if parent_node:
+                        parent_node.best_child = child
+                
                 beta = min(beta, score)
-
                 if beta <= alpha:
-                    # Prune: Mark remaining siblings as pruned
+                    # Prune
                     for j in range(i + 1, len(children)):
                         sibling_to_prune = children[j]
                         sibling_to_prune.is_pruned = True
                         sibling_to_prune.visit_order = self.visit_counter
                         self.visit_counter += 1
                     return {'score': min_score}
+
             if min_score == float('inf'):
                 return self._evaluate_board(game)
             return {'score': min_score}

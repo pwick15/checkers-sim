@@ -12,45 +12,44 @@ const getNotation = (r, c) => {
   return (r * 4) + Math.floor(c / 2) + 1;
 };
 
-const MiniBoard = ({ board, lastMove }) => {
+const MiniBoard = ({ board }) => {
+  if (!board) return null;
   return (
-    <div className="mini-board-wrapper">
-      <div className="mini-board-scale">
-        <Board board={board} lastMove={lastMove} onSquareClick={() => { }} />
-      </div>
+    <div className="mini-grid">
+      {board.map((row, r) =>
+        row.map((piece, c) => (
+          <div key={`${r}-${c}`} className={`mini-square ${(r + c) % 2 !== 0 ? 'dark' : 'light'}`}>
+            {piece && (
+              <div className={`mini-piece ${piece.color} ${piece.is_king ? 'king' : ''}`} />
+            )}
+          </div>
+        ))
+      )}
     </div>
   );
 };
 
-const SimulationPathExplorer = ({ path }) => {
-  if (!path || !path.moves) return null;
+const FutureMove = ({ move }) => {
+  const [hover, setHover] = useState(false);
+  const fromNot = getNotation(move.from[0], move.from[1]);
+  const toNot = getNotation(move.to[0], move.to[1]);
 
   return (
-    <div className="simulation-path-explorer">
-      <h4 style={{ color: '#fbc02d', margin: '20px 0 10px 0', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-        AI Future Prediction (PV Path)
-      </h4>
-      <div className="path-snapshots">
-        {path.moves.map((step, i) => (
-          <div key={i} className="path-snapshot-item">
-            <div className="snapshot-label">
-              <span className="step-num">#{i + 1}</span>
-              <span className="player-tag" style={{ color: step.player === 'red' ? '#e57373' : '#90caf9' }}>
-                {step.player === 'red' ? 'YOU' : 'AI'}
-              </span>
-            </div>
-            <MiniBoard board={step.board_state} lastMove={{ from: step.from, to: step.to }} />
-            <div className="snapshot-math">
-              <div className={`snapshot-score ${step.score >= 0 ? 'positive' : 'negative'}`}>
-                {step.score >= 0 ? '+' : ''}{step.score}
-              </div>
-              <div className="snapshot-desc">
-                {getNotation(step.from[0], step.from[1])} → {getNotation(step.to[0], step.to[1])}
-              </div>
-            </div>
+    <div
+      className="future-move"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {fromNot} → {toNot}
+      {hover && move.board && (
+        <div className="mini-board-popup">
+          <div style={{ fontSize: '10px', marginBottom: '4px', color: '#fbc02d' }}>Future State</div>
+          <MiniBoard board={move.board} />
+          <div style={{ fontSize: '10px', marginTop: '4px', opacity: 0.8 }}>
+            Score: {move.score > 0 ? '+' : ''}{move.score}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -336,9 +335,9 @@ function App() {
             <div className="controls-bar" style={{ width: 480, marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="control-btn" onClick={() => setPage('landing')}>Exit</button>
-                <button className="control-btn" onClick={() => setTourActive(true)} title="Restart Tour">?</button>
+                <button className="control-btn icon-btn" onClick={() => setTourActive(true)} title="Restart Tour">?</button>
               </div>
-              <button className="control-btn undo-btn" onClick={handleUndo} title="Undo Last Move" style={{ fontSize: '20px', padding: '4px 15px', lineHeight: 1 }}>⟲</button>
+              <button className="control-btn icon-btn" onClick={handleUndo} title="Undo Last Move">⟲</button>
             </div>
 
             {/* ANIMATION OVERLAY */}
@@ -374,6 +373,14 @@ function App() {
                       >
                         <div className="move-info">
                           <div className="move-notation">Move {i + 1}: {fromNot} - {toNot}</div>
+                          {m.pv && m.pv.length > 0 && (
+                            <div className="move-sequence">
+                              <span style={{ fontSize: 10, color: '#666', marginRight: 4 }}>Then:</span>
+                              {m.pv.map((step, idx) => (
+                                <FutureMove key={idx} move={step} />
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div
                           className={`move-score ${m.score > 0 ? 'positive' : 'negative'} clickable-score`}
@@ -513,49 +520,55 @@ function App() {
       {explainerNode && (
         <div className="modal-overlay" onClick={() => setExplainerNode(null)}>
           <div className="modal-content explainer-modal" onClick={e => e.stopPropagation()}>
-            <h3>Scoring Breakdown</h3>
-            <p style={{ fontSize: 14, color: '#999' }}>How the AI evaluates this position's strength.</p>
+            <h3 style={{ color: '#fbc02d' }}>Scoring Breakdown</h3>
+            <p style={{ fontSize: 13, color: '#999' }}>Detailed math for the state AFTER this move.</p>
 
             {explainerNode.score_breakdown ? (
-              <div className="explainer-scroll-area">
-                <div style={{ marginTop: 20 }}>
-                  <div className="analogy-box">
-                    <strong>The "Tug-of-War" Analogy:</strong> Think of the score as a rope.
-                    When the number is <strong>Positive (+)</strong>, you are pulling the game toward victory.
-                    When it's <strong>Negative (-)</strong>, the Bot has the advantage.
+              <div style={{ marginTop: 20 }}>
+                {/* MATERIAL TABLE */}
+                <div style={{ background: '#0d0f15', padding: '15px', borderRadius: '10px', marginBottom: '20px', border: '1px solid #333' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <span style={{ color: '#e57373', fontSize: 13 }}>Your Piece Math (Red)</span>
+                    <span style={{ fontWeight: 'bold' }}>{explainerNode.score_breakdown.Pieces > 0 ? '+' : ''}{(explainerNode.score_breakdown.Pieces + (explainerNode.score_breakdown.Kings || 0)) > 0 ? Math.floor((explainerNode.score_breakdown.Pieces + (explainerNode.score_breakdown.Kings || 0)) / 10) : 0} total</span>
                   </div>
 
-                  <h4 style={{ color: '#fbc02d', marginBottom: 15, fontSize: 13, textTransform: 'uppercase' }}>1. Local Math (Current Board)</h4>
-                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: 15, borderRadius: 12, marginBottom: 20 }}>
-                    {Object.entries(explainerNode.score_breakdown).map(([key, val]) => {
-                      const details = {
-                        'Pieces': 'Basic Math: Each of your pieces is +10. Each bot piece is -10.',
-                        'Kings': 'Power Up: Kings are worth +15 (You) or -15 (Bot) because they move backwards.',
-                        'Position': 'Safety: Extra points for keeping pieces on the edges where they can\'t be jumped.'
-                      }[key] || 'General board evaluation factor.';
-
-                      return (
-                        <div key={key} style={{ marginBottom: 12 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                            <span style={{ fontWeight: 'bold', color: '#fff', fontSize: 13 }}>{key}</span>
-                            <span className={val >= 0 ? 'positive' : 'negative'} style={{ fontWeight: 'bold' }}>{val >= 0 ? '+' : ''}{val}</span>
-                          </div>
-                          <div style={{ fontSize: 11, color: '#90a4ae' }}>{details}</div>
-                        </div>
-                      );
-                    })}
+                  <div className="score-breakdown-row" style={{ fontSize: 12, opacity: 0.8 }}>
+                    <span>Pieces Cost (Material)</span>
+                    <span className="value">{(explainerNode.score_breakdown.Pieces || 0) + (explainerNode.score_breakdown.Kings || 0)}</span>
+                  </div>
+                  <div className="score-breakdown-row" style={{ fontSize: 12, opacity: 0.8 }}>
+                    <span>Position Safety</span>
+                    <span className="value">{explainerNode.score_breakdown.Position || 0}</span>
+                  </div>
+                  <hr style={{ border: '0.5px solid #333', margin: '15px 0' }} />
+                  <div className="score-breakdown-row total" style={{ fontSize: 16 }}>
+                    <span style={{ color: '#fbc02d' }}>Final Score</span>
+                    <span className={`value ${explainerNode.score >= 0 ? 'positive' : 'negative'}`}>
+                      {explainerNode.score > 0 ? 'YOU' : 'AI'} {explainerNode.score >= 0 ? '+' : ''}{explainerNode.score}
+                    </span>
                   </div>
                 </div>
 
-                {explainerNode.rank && analysis.simulation_paths && analysis.simulation_paths[explainerNode.rank - 1] && (
-                  <SimulationPathExplorer path={analysis.simulation_paths[explainerNode.rank - 1]} />
-                )}
+                {/* TUG OF WAR EXPLAINER */}
+                <div style={{ borderLeft: '4px solid #fbc02d', paddingLeft: '15px', margin: '20px 0' }}>
+                  <h4 style={{ margin: '0 0 5px 0', color: '#fbc02d', fontSize: 14 }}>The "Tug of War" Scale</h4>
+                  <p style={{ fontSize: '13px', color: '#ccc', margin: 0 }}>
+                    We use a <strong>Red (+) vs Black (-)</strong> scale.
+                    Positive numbers mean <strong>Red (You)</strong> has the advantage. Negative numbers mean <strong>Black (AI)</strong> has the lead.
+                  </p>
+                </div>
+
+                <p style={{ fontSize: '13px', lineHeight: '1.6', color: '#b8c5d6' }}>
+                  Each piece is worth <strong>10 points</strong>, and Kings are worth <strong>15 points</strong>.
+                  The AI also rewards pieces for staying on safe squares.
+                  The calculation is: <code>(Red Material + Safety) - (Black Material + Safety)</code>.
+                </p>
               </div>
             ) : (
               <div style={{ marginTop: 20, padding: 20, background: 'rgba(255,193,7,0.1)', borderRadius: 12, border: '1px solid #ffc107' }}>
-                <h4 style={{ margin: '0 0 10px 0', color: '#ffc107' }}>Hidden Strategy Node</h4>
+                <h4 style={{ margin: '0 0 10px 0', color: '#ffc107' }}>Deep Prediction Node</h4>
                 <p style={{ margin: 0, fontSize: 14, color: '#ddd', lineHeight: 1.5 }}>
-                  The AI didn't calculate the local math for this specific dot to save speed. Instead, it "inherited" the score from the best future move it found further down this path.
+                  This score was found deeper in the search tree. It represents a future board state that the AI evaluated using its heuristics.
                 </p>
               </div>
             )}
