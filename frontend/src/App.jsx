@@ -522,11 +522,11 @@ function App() {
 
             <div className={`board-wrapper ${isPreviewMode ? 'preview-active' : ''}`} style={{ width: 400, height: 400, position: 'relative' }}>
               <Board
-                board={(hoveredNode && hoveredNode.board_state) || previewBoardState || displayBoard || board}
+                board={previewBoardState || (hoveredNode && hoveredNode.board_state) || displayBoard || board}
                 validMoves={validMoves}
                 selectedPiece={selectedPiece}
                 onSquareClick={handleSquareClick}
-                lastMove={(hoveredNode && hoveredNode.move) ? hoveredNode.move : (previewLastMove || lastMove)}
+                lastMove={previewLastMove || (hoveredNode && hoveredNode.move) || lastMove}
                 theme={theme}
                 isPreview={isPreviewMode}
               />
@@ -571,7 +571,7 @@ function App() {
                   animation: 'pulse-border 1.5s infinite ease-in-out'
                 }}
               >
-                Execute AI Move
+                Execute Best AI Move
               </button>
             )}
 

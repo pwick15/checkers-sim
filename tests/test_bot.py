@@ -168,7 +168,7 @@ def test_bot_evaluates_winning_position_highly():
     score = bot._evaluate_board(game)
 
     # Winning position should have high positive score
-    assert score > 5000
+    assert score['score'] > 5000
 
 
 def test_bot_evaluates_losing_position_poorly():
@@ -183,4 +183,4 @@ def test_bot_evaluates_losing_position_poorly():
     score = bot._evaluate_board(game)
 
     # Losing position should have high negative score
-    assert score < -5000
+    assert score['score'] < -5000

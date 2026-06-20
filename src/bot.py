@@ -56,6 +56,10 @@ class BotPlayer(ABC):
             grid.append(row)
         return grid
 
+    def _copy_game(self, game):
+        """Create a deep copy of the game state."""
+        return copy.deepcopy(game)
+
     @abstractmethod
     def get_move(self, game):
         """
@@ -94,7 +98,9 @@ class BotPlayer(ABC):
                 valid_moves = game.board.get_valid_moves(piece, r, c)
                 for end_pos, captured in valid_moves.items():
                     if captured is not None: # ONLY capture moves allowed during multi-jump
-                        moves.append((((r, c), end_pos), True))
+                        game_copy = self._copy_game(game)
+                        if game_copy.play_move((r, c), end_pos):
+                            moves.append((((r, c), end_pos), True))
             return moves
 
         for r in range(8):
@@ -104,7 +110,9 @@ class BotPlayer(ABC):
                     valid_moves = game.board.get_valid_moves(piece, r, c)
                     for end_pos, captured in valid_moves.items():
                         is_capture = captured is not None
-                        moves.append((((r, c), end_pos), is_capture))
+                        game_copy = self._copy_game(game)
+                        if game_copy.play_move((r, c), end_pos):
+                            moves.append((((r, c), end_pos), is_capture))
 
         return moves
 
@@ -432,7 +440,8 @@ class MinimaxBot(BotPlayer):
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
                             game_copy = self._copy_game(game)
-                            game_copy.play_move((r, c), end_pos)
+                            if not game_copy.play_move((r, c), end_pos):
+                                continue
                             
                             if parent_node is not None:
                                 child_node = DecisionNode(((r, c), end_pos))
@@ -475,7 +484,8 @@ class MinimaxBot(BotPlayer):
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
                             game_copy = self._copy_game(game)
-                            game_copy.play_move((r, c), end_pos)
+                            if not game_copy.play_move((r, c), end_pos):
+                                continue
 
                             if parent_node is not None:
                                 child_node = DecisionNode(((r, c), end_pos))
@@ -549,10 +559,6 @@ class MinimaxBot(BotPlayer):
                     score += (val + pos_bonus) * multiplier
 
         return {'score': score, 'breakdown': breakdown}
-
-    def _copy_game(self, game):
-        """Create a deep copy of the game state."""
-        return copy.deepcopy(game)
 
 
 class AlphaBetaBot(MinimaxBot):
@@ -672,7 +678,9 @@ class AlphaBetaBot(MinimaxBot):
                     if piece and piece.color == 'red':
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
-                            moves.append(((r, c), end_pos))
+                            game_copy = self._copy_game(game)
+                            if game_copy.play_move((r, c), end_pos):
+                                moves.append(((r, c), end_pos))
             
             children = []
             if parent_node:
@@ -734,7 +742,9 @@ class AlphaBetaBot(MinimaxBot):
                     if piece and piece.color == 'black':
                         valid_moves = game.board.get_valid_moves(piece, r, c)
                         for end_pos in valid_moves:
-                            moves.append(((r, c), end_pos))
+                            game_copy = self._copy_game(game)
+                            if game_copy.play_move((r, c), end_pos):
+                                moves.append(((r, c), end_pos))
             
             children = []
             if parent_node:
