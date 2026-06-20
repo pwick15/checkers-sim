@@ -297,7 +297,8 @@ class MinimaxBot(BotPlayer):
                 
                 'is_top_move': current_rank != -1 and current_rank < 3,
                 'branch_rank': current_rank,
-                'score_breakdown': node.score_breakdown
+                'score_breakdown': node.score_breakdown,
+                'board_state': node.board_state
             }
             
             flat_nodes.append(node_data)

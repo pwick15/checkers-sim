@@ -106,6 +106,23 @@ function App() {
   const [tourActive, setTourActive] = useState(false);
   const [showExplainer, setShowExplainer] = useState(false);
 
+  // Preview Mode State
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [previewNode, setPreviewNode] = useState(null);
+
+  const handleSelectPreviewNode = (node) => {
+    if (!node || !node.board_state) return;
+    setDisplayBoard(node.board_state);
+    setIsPreviewMode(true);
+    setPreviewNode(node);
+  };
+
+  const handleExitPreview = () => {
+    setDisplayBoard(null);
+    setIsPreviewMode(false);
+    setPreviewNode(null);
+  };
+
   const requestRef = useRef();
 
   const fetchState = async (id) => {
@@ -148,6 +165,8 @@ function App() {
       setDisplayBoard(null);
       setAnalysis(null);
       setExploredCount(0);
+      setIsPreviewMode(false);
+      setPreviewNode(null);
       setStatus("Initializing...");
       await fetchState(data.game_id);
 
@@ -163,7 +182,7 @@ function App() {
   // --- Move Logic ---
   const handleSquareClick = async (row, col) => {
     // Logic same as before...
-    if (isAnimating || winner || currentTurn !== 'red') return;
+    if (isAnimating || winner || currentTurn !== 'red' || isPreviewMode) return;
 
     const move = validMoves.find(m => m.row === row && m.col === col);
     if (selectedPiece && move) {
@@ -205,6 +224,7 @@ function App() {
   };
 
   const triggerBot = async () => {
+    handleExitPreview();
     setStatus("AI is simulating future moves to find the best strategy...");
     try {
       const res = await fetch(`/api/game/${gameId}/bot-move`, { method: 'POST' });
@@ -284,6 +304,7 @@ function App() {
   };
 
   const handleUndo = async () => {
+    handleExitPreview();
     await fetch(`/api/game/${gameId}/undo`, { method: 'POST' });
     // Logic to double undo if vs bot... matches original code
     const data = await fetchState(gameId);
@@ -361,8 +382,38 @@ function App() {
           {/* LEFT: BOARD */}
           <div id="board-area">
             <div id="board-header" style={{ width: 480, display: 'flex', justifyContent: 'center', marginBottom: 15 }}>
-              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 500, color: currentTurn === 'red' ? 'var(--text-primary)' : 'var(--accent-gold)', letterSpacing: '0.5px' }}>{status}</div>
+              <div className={isAnimating ? "pulsing" : ""} style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 500, color: currentTurn === 'red' ? 'var(--text-primary)' : 'var(--accent-gold)', letterSpacing: '0.5px' }}>{status}</div>
             </div>
+
+            {/* PREVIEW BANNER */}
+            {isPreviewMode && previewNode && (
+              <div style={{
+                width: 480,
+                background: 'rgba(179, 139, 89, 0.12)',
+                border: '1px solid var(--accent-gold)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                marginBottom: 12,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxSizing: 'border-box'
+              }}>
+                <div style={{ fontSize: 13 }}>
+                  <strong style={{ color: 'var(--accent-gold)' }}>Previewing AI Move</strong>
+                  <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
+                    Depth: {previewNode.depth} | Score: {previewNode.score} {previewNode.move && `| Move: ${getNotation(previewNode.move.from[0], previewNode.move.from[1])} → ${getNotation(previewNode.move.to[0], previewNode.move.to[1])}`}
+                  </div>
+                </div>
+                <button
+                  className="play-button small"
+                  onClick={handleExitPreview}
+                  style={{ height: '26px', padding: '0 10px', fontSize: '11px', flexShrink: 0 }}
+                >
+                  Exit Preview
+                </button>
+              </div>
+            )}
 
             {/* BLACK (AI) PROFILE */}
             <div style={{ width: 480, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 13 }}>
@@ -386,7 +437,7 @@ function App() {
               validMoves={validMoves}
               selectedPiece={selectedPiece}
               onSquareClick={handleSquareClick}
-              lastMove={lastMove}
+              lastMove={isPreviewMode ? previewNode.move : lastMove}
               theme={theme}
             />
 
@@ -532,8 +583,7 @@ function App() {
                   exploredCount={exploredCount}
                   onNodeHover={setHoveredNode}
                   onNodeClick={(node) => {
-                    setHoveredNode(node);
-                    setShowTree(true);
+                    handleSelectPreviewNode(node);
                   }}
                 />
 
@@ -581,13 +631,11 @@ function App() {
         <div className="tree-content">
           <TreeView
             tree={analysis ? reconstructTree(analysis.nodes) : null}
-            // Pass hovered node ID from GridViz interaction?
-            // Or we need a new state for 'clickedNodeId' 
-            // For now, let's use hoveredNode
             highlightedId={hoveredNode?.id}
             inputWidth={window.innerWidth * 0.6}
             height={window.innerHeight - 60}
             onClose={() => setShowTree(false)}
+            onNodeClick={handleSelectPreviewNode}
           />
         </div>
       </div>
@@ -676,13 +724,13 @@ function App() {
                       <div className="math-row">
                         <div className="math-label">
                           <strong>Heuristic Breakdown</strong>
-                          <p>The numbers above show the components of the <strong>Strategic Outcome</strong> board on the left. Red dots indicate Red lead, Blue dots indicate Black lead.</p>
+                          <p>The numbers above show the components of the <strong>Strategic Outcome</strong> board on the left. White dots indicate White lead, Black dots indicate Black lead.</p>
                         </div>
                       </div>
                       <div className="math-row">
                         <div className="math-label">
                           <strong>Calculation</strong>
-                          <p><code>Score = (Red Material + Red Safety) - (Black Material + Black Safety)</code></p>
+                          <p><code>Score = (White Material + White Safety) - (Black Material + Black Safety)</code></p>
                         </div>
                       </div>
                     </div>
@@ -690,7 +738,7 @@ function App() {
                 </div>
 
                 <div className="analogy-box" style={{ marginTop: 20 }}>
-                  <strong>The "Tug of War":</strong> The AI sees Red as <strong>advantage (+)</strong> and Black as <strong>advantage (-)</strong>.
+                  <strong>The "Tug of War":</strong> The AI sees White as <strong>advantage (+)</strong> and Black as <strong>advantage (-)</strong>.
                   Every move is evaluated based on how much it pulls the final state towards your side.
                 </div>
               </div>
@@ -712,17 +760,17 @@ function App() {
       {pruneExplain && (
         <div className="modal-overlay" onClick={() => setPruneExplain(null)}>
           <div className="modal-content explainer-modal" onClick={e => e.stopPropagation()}>
-            <h3 style={{ color: '#ff5252' }}>Alpha-Beta Pruning</h3>
-            <p style={{ fontSize: 14, color: '#999' }}>Why did the AI skip this move?</p>
+            <h3 style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-serif)' }}>Alpha-Beta Pruning</h3>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Why did the AI skip this move?</p>
 
-            <div style={{ marginTop: 20, lineHeight: 1.6 }}>
+            <div style={{ marginTop: 20, lineHeight: 1.6, color: 'var(--text-primary)' }}>
               <p>The AI skipped this branch because it already found a <strong>guaranteed better option</strong> elsewhere.</p>
               <p>In competitive search, if one path is already proven to be worse than a previously discovered move, the AI "prunes" it to save time and think deeper on promising paths.</p>
             </div>
 
-            <div style={{ marginTop: 20, display: 'flex', gap: 10, alignItems: 'center', background: '#000', padding: 10, borderRadius: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#444', border: '1px solid #d32f2f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>X</div>
-              <div style={{ fontSize: 12 }}>This symbol represents a "Cutoff". No need to look further if we already know it's a lost cause!</div>
+            <div style={{ marginTop: 20, display: 'flex', gap: 10, alignItems: 'center', background: 'var(--bg-primary)', border: '1px solid var(--bg-panel-border)', padding: 10, borderRadius: 8 }}>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--bg-panel)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>X</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>This symbol represents a "Cutoff". No need to look further if we already know it's a lost cause!</div>
             </div>
 
             <button className="control-btn" style={{ marginTop: 20, width: '100%' }} onClick={() => setPruneExplain(false)}>I understand</button>

@@ -211,7 +211,7 @@
     flex-direction: column;
     gap: 20px;
     height: 100%;
-    overflow: hidden;
+    overflow: visible;
     padding: 10px 0;
     box-sizing: border-box;
     position: relative;
@@ -285,9 +285,9 @@
 /* Mini Board Popup */
 .mini-board-popup {
     position: absolute;
-    bottom: 120%;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 50%;
+    right: 115%;
+    transform: translateY(-50%);
     background: var(--bg-panel);
     border: 1px solid var(--accent-gold);
     padding: 8px;
@@ -1133,4 +1133,14 @@
     font-size: 11px;
     color: #90a4ae;
     font-weight: 500;
+}
+
+.pulsing {
+    animation: pulse 1.6s infinite ease-in-out;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
 }

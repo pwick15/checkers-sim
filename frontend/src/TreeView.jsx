@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 
-const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId }) => {
+const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId, onNodeClick }) => {
     const svgRef = useRef(null);
     const [transform, setTransform] = useState({ x: width / 2, y: 50, k: 1 });
     const [dragging, setDragging] = useState(false);
@@ -168,7 +168,12 @@ const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId }) =
                         }
 
                         return (
-                            <g key={n.id} transform={`translate(${n.x}, ${n.y})`}>
+                            <g
+                                key={n.id}
+                                transform={`translate(${n.x}, ${n.y})`}
+                                onClick={() => onNodeClick && onNodeClick(n)}
+                                style={{ cursor: 'pointer' }}
+                            >
                                 {isHigh && <circle r={r + 4} fill="rgba(255,255,255,0.5)" />}
                                 <circle
                                     r={r}
