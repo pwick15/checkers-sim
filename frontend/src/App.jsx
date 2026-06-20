@@ -118,8 +118,6 @@ function App() {
   useEffect(() => { speedRef.current = speed; }, [speed]);
 
   const [lastMove, setLastMove] = useState(null);
-  const [showTree, setShowTree] = useState(false);
-
   // Educational State
   const [showGlossary, setShowGlossary] = useState(false);
   const [explainerNode, setExplainerNode] = useState(null); // Node details for score explainer
@@ -764,7 +762,7 @@ function App() {
                   <div className="speed-dropdown" style={{ position: 'relative' }}>
                     <button
                       className="control-btn small"
-                      style={{ padding: '4px 12px', fontSize: 12 }}
+                      style={{ padding: '4px 12px', fontSize: 13, fontWeight: 'normal', border: 'none', background: 'transparent', color: 'var(--text-muted)' }}
                       onClick={() => document.getElementById('speed-popup').classList.toggle('show')}
                     >
                       Speed: {speed}x
@@ -780,15 +778,6 @@ function App() {
                       ))}
                     </div>
                   </div>
-
-                  {/* SHOW TREE BUTTON */}
-                  <button
-                    className="control-btn small"
-                    style={{ padding: '4px 12px', fontSize: 12 }}
-                    onClick={() => setShowTree(true)}
-                  >
-                    Show Tree
-                  </button>
                 </div>
               </div>
 
@@ -807,8 +796,8 @@ function App() {
 
                 {/* LEGEND */}
                 <div className="legend" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                  <div className="legend-item"><div className="dot explored-max"></div> Explored (Max)</div>
-                  <div className="legend-item"><div className="dot explored-min"></div> Explored (Min)</div>
+                  <div className="legend-item"><div className="dot explored-max"></div> AI Turn (Max)</div>
+                  <div className="legend-item"><div className="dot explored-min"></div> Your Turn (Min)</div>
                   <div className="legend-item"><div className="dot pruned">×</div> Pruned</div>
                   <div className="legend-item"><div className="dot top-path"></div> Best Path</div>
                   <button 
@@ -848,34 +837,6 @@ function App() {
           </div>
         </div>
       )}
-      {/* TREE SLIDE-IN PANEL */}
-      <div className={`tree-slide-panel ${showTree ? 'open' : ''}`}>
-        <div className="tree-header">
-          <h2>
-            <div style={{ width: 10, height: 10, background: 'var(--accent-gold)', borderRadius: '50%', marginRight: 10 }}></div>
-            Decision Tree Explorer
-          </h2>
-          <div className="tree-controls">
-            <button className="control-btn small" onClick={() => setShowTree(false)}>Close</button>
-          </div>
-        </div>
-        <div className="tree-content">
-          <TreeView
-            tree={analysis ? reconstructTree(analysis.nodes) : null}
-            highlightedId={hoveredNode?.id}
-            inputWidth={window.innerWidth * 0.6}
-            height={window.innerHeight - 60}
-            onClose={() => setShowTree(false)}
-            onNodeClick={(node) => {
-              if (node.is_pruned) {
-                setPruneExplain(true);
-              }
-              handleSelectPreviewNode(node);
-            }}
-            onNodeHover={setHoveredNode}
-          />
-        </div>
-      </div>
 
       {/* WIN MODAL */}
       {winner && (
@@ -904,8 +865,8 @@ function App() {
                   The numerical score represents who is winning in that simulated future state.
                 </p>
                 <ul style={{ margin: '6px 0 0 16px', padding: 0, color: '#aaa' }}>
-                  <li><strong style={{ color: 'var(--text-primary)' }}>Positive Score (+1 to +10)</strong>: Advantage White (You)</li>
-                  <li><strong style={{ color: 'var(--accent-gold)' }}>Negative Score (-1 to -10)</strong>: Advantage Black (AI)</li>
+                  <li><strong style={{ color: 'var(--text-primary)' }}>Positive Score</strong>: Advantage White (You)</li>
+                  <li><strong style={{ color: 'var(--accent-gold)' }}>Negative Score</strong>: Advantage Black (AI)</li>
                   <li><strong style={{ color: 'var(--text-muted)' }}>0 (Even Score)</strong>: Equal material and position balance</li>
                 </ul>
               </div>
