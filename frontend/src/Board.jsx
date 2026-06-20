@@ -104,9 +104,9 @@ export default function Board({ board, validMoves = [], selectedPiece, lastMove,
             drawPiece(ctx, dragging.piece, dragging.x, dragging.y);
         }
 
-        // Draw preview border (Removed inner border as wrapper handles it)
+    // Draw preview border (Removed inner border as wrapper handles it)
 
-    }, [board, validMoves, selectedPiece, dragging, theme, isPreview]);
+    }, [board, validMoves, selectedPiece, dragging, theme, isPreview, lastMove]);
 
     function drawPiece(ctx, piece, x, y) {
         const radius = SQUARE_SIZE / 2 - 6;

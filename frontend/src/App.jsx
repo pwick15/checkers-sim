@@ -554,6 +554,7 @@ function App() {
 
               <div className={`board-wrapper ${isPreviewMode ? 'preview-active' : ''}`} style={{ width: 480, height: 480, position: 'relative', margin: '20px 0' }}>
                 <Board
+                  key={`preview-board-${activePathStepIndex}`}
                   board={previewBoardState || (hoveredNode && hoveredNode.board_state) || displayBoard || board}
                   validMoves={validMoves}
                   selectedPiece={selectedPiece}
@@ -660,8 +661,9 @@ function App() {
                 {/* STEPPER */}
                 <div className="step-stepper-container" style={{ display: 'flex', gap: 6, marginBottom: 8, overflowX: 'auto', paddingBottom: 4 }}>
                   {decisionPath.map((step, idx) => {
-                    const isAITurn = step.depth % 2 !== 0;
-                    const playerLabel = isAITurn ? "AI" : "You";
+                    const to = step.move?.to;
+                    const pieceColor = to && step.board_state ? step.board_state[to[0]][to[1]]?.color : null;
+                    const playerLabel = pieceColor ? (pieceColor === 'red' ? "You" : "AI") : ((step.depth % 2 !== 0) ? "AI" : "You");
                     const fromNot = step.move ? getNotation(step.move.from[0], step.move.from[1]) : "?";
                     const toNot = step.move ? getNotation(step.move.to[0], step.move.to[1]) : "?";
                     const isActive = idx === activePathStepIndex;
