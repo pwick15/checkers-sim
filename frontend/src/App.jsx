@@ -458,137 +458,178 @@ function App() {
       {page === 'game' && (
         <div className="game-page">
           {/* LEFT: BOARD */}
-          <div id="board-area">
-            <div id="board-header" style={{ width: 400, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              {isAnimating && (
-                <div style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: 'var(--accent-gold)',
-                  boxShadow: '0 0 8px var(--accent-gold)',
-                  animation: 'pulse 1.2s infinite ease-in-out'
-                }}></div>
-              )}
-              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 20, fontWeight: 500, color: currentTurn === 'red' ? 'var(--text-primary)' : 'var(--accent-gold)', letterSpacing: '0.5px' }}>{status}</div>
+          <div id="board-area" style={{ display: 'flex', flexDirection: 'row', gap: 24, justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+            {/* LEFT SIDEBAR CONTROLS */}
+            <div className="left-sidebar-controls" style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px 8px',
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--bg-panel-border)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              width: 50,
+              flexShrink: 0
+            }}>
+              {/* EXIT */}
+              <button 
+                className="control-btn icon-btn" 
+                onClick={() => setPage('landing')} 
+                title="Exit Game"
+                style={{ width: 36, height: 36, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                🚪
+              </button>
+              
+              {/* UNDO */}
+              <button 
+                className="control-btn icon-btn" 
+                onClick={handleUndo} 
+                title="Undo Last Move" 
+                style={{ width: 36, height: 36, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                ⟲
+              </button>
+
+              {/* THEME TOGGLE */}
+              <button 
+                className="control-btn icon-btn" 
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
+                title="Toggle Theme" 
+                style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                {theme === 'dark' ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
+                )}
+              </button>
+
+              {/* HELP */}
+              <button 
+                className="control-btn icon-btn" 
+                onClick={() => setTourActive(true)} 
+                title="Restart Tour" 
+                style={{ width: 36, height: 36, fontSize: 16, fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                ?
+              </button>
             </div>
 
-            {/* PREVIEW BANNER */}
-            {isPreviewMode && previewNode && (
-              <div style={{
-                width: 400,
-                background: 'rgba(179, 139, 89, 0.12)',
-                border: '1px solid var(--accent-gold)',
-                borderRadius: '8px',
-                padding: '8px 12px',
-                marginBottom: 8,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                boxSizing: 'border-box'
-              }}>
-                <div style={{ fontSize: 12 }}>
-                  <strong style={{ color: 'var(--accent-gold)' }}>Previewing AI Simulation</strong>
-                  <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>
-                    Step {activePathStepIndex + 1} of {decisionPath.length} | Score: {decisionPath[activePathStepIndex]?.score === 0 ? 'Even' : (decisionPath[activePathStepIndex]?.score > 0 ? `+${decisionPath[activePathStepIndex].score}` : decisionPath[activePathStepIndex]?.score)} {decisionPath[activePathStepIndex]?.move && `| Move: ${getNotation(decisionPath[activePathStepIndex].move.from[0], decisionPath[activePathStepIndex].move.from[1])} → ${getNotation(decisionPath[activePathStepIndex].move.to[0], decisionPath[activePathStepIndex].move.to[1])}`}
+            {/* BOARD CENTER COLUMN */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div id="board-header" style={{ width: 480, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                {isAnimating && (
+                  <div style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--accent-gold)',
+                    boxShadow: '0 0 8px var(--accent-gold)',
+                    animation: 'pulse 1.2s infinite ease-in-out'
+                  }}></div>
+                )}
+                <div style={{ fontFamily: 'var(--font-serif)', fontSize: 20, fontWeight: 500, color: currentTurn === 'red' ? 'var(--text-primary)' : 'var(--accent-gold)', letterSpacing: '0.5px' }}>{status}</div>
+              </div>
+
+              {/* BLACK (AI) PROFILE */}
+              <div style={{ width: 480, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>BLACK (AI)</span>
+                  <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    {Array.from({ length: blackCaptured }).map((_, i) => (
+                      <div key={i} className="mini-piece red captured" style={{ width: 10, height: 10, margin: 0 }} title="Captured White Piece" />
+                    ))}
                   </div>
                 </div>
+                {diff < 0 && (
+                  <span style={{ fontWeight: 'bold', color: 'var(--accent-gold)', fontSize: 11 }}>
+                    +{Math.abs(diff)}
+                  </span>
+                )}
+              </div>
+
+              <div className={`board-wrapper ${isPreviewMode ? 'preview-active' : ''}`} style={{ width: 480, height: 480, position: 'relative', margin: '20px 0' }}>
+                <Board
+                  board={previewBoardState || (hoveredNode && hoveredNode.board_state) || displayBoard || board}
+                  validMoves={validMoves}
+                  selectedPiece={selectedPiece}
+                  onSquareClick={handleSquareClick}
+                  lastMove={previewLastMove || (hoveredNode && hoveredNode.move) || lastMove}
+                  theme={theme}
+                  isPreview={isPreviewMode}
+                />
+                {isPreviewMode && (
+                  <div className="preview-indicator-badge" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 6, zIndex: 10 }}>
+                    SIMULATION PREVIEW
+                    <span 
+                      onClick={handleExitPreview} 
+                      style={{ 
+                        color: '#ff5252', 
+                        cursor: 'pointer', 
+                        fontWeight: 'bold', 
+                        fontSize: '12px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginLeft: 4,
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        background: 'rgba(255, 82, 82, 0.1)',
+                        transition: 'all 0.2s ease'
+                      }}
+                      title="Exit Preview"
+                    >
+                      ✕
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* WHITE (YOU) PROFILE */}
+              <div style={{ width: 480, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 6, fontSize: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>WHITE (YOU)</span>
+                  <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    {Array.from({ length: redCaptured }).map((_, i) => (
+                      <div key={i} className="mini-piece black captured" style={{ width: 10, height: 10, margin: 0 }} title="Captured Black Piece" />
+                    ))}
+                  </div>
+                </div>
+                {diff > 0 && (
+                  <span style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: 11 }}>
+                    +{diff}
+                  </span>
+                )}
+              </div>
+
+              {/* AI DECISION ACTION BUTTON */}
+              {currentTurn === 'black' && pendingAIMove && !isAnimating && (
                 <button
-                  className="play-button small"
-                  onClick={handleExitPreview}
-                  style={{ height: '24px', padding: '0 8px', fontSize: '10px', flexShrink: 0 }}
+                  className="play-button"
+                  onClick={handleExecuteAIMove}
+                  style={{
+                    width: 320,
+                    height: 38,
+                    fontSize: 13,
+                    fontWeight: 'bold',
+                    marginTop: 8,
+                    marginBottom: 8,
+                    letterSpacing: '0.5px',
+                    borderRadius: '20px',
+                    boxShadow: '0 0 15px rgba(179, 139, 89, 0.3)',
+                    animation: 'pulse-border 1.5s infinite ease-in-out'
+                  }}
                 >
-                  Exit Preview
+                  Execute Best AI Move
                 </button>
-              </div>
-            )}
-
-            {/* BLACK (AI) PROFILE */}
-            <div style={{ width: 400, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>BLACK (AI)</span>
-                <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                  {Array.from({ length: blackCaptured }).map((_, i) => (
-                    <div key={i} className="mini-piece red captured" style={{ width: 10, height: 10, margin: 0 }} title="Captured White Piece" />
-                  ))}
-                </div>
-              </div>
-              {diff < 0 && (
-                <span style={{ fontWeight: 'bold', color: 'var(--accent-gold)', fontSize: 11 }}>
-                  +{Math.abs(diff)}
-                </span>
               )}
             </div>
-
-            <div className={`board-wrapper ${isPreviewMode ? 'preview-active' : ''}`} style={{ width: 400, height: 400, position: 'relative' }}>
-              <Board
-                board={previewBoardState || (hoveredNode && hoveredNode.board_state) || displayBoard || board}
-                validMoves={validMoves}
-                selectedPiece={selectedPiece}
-                onSquareClick={handleSquareClick}
-                lastMove={previewLastMove || (hoveredNode && hoveredNode.move) || lastMove}
-                theme={theme}
-                isPreview={isPreviewMode}
-              />
-              {isPreviewMode && (
-                <div className="preview-indicator-badge">
-                  SIMULATION PREVIEW
-                </div>
-              )}
-            </div>
-
-            {/* WHITE (YOU) PROFILE */}
-            <div style={{ width: 400, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 6, fontSize: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>WHITE (YOU)</span>
-                <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                  {Array.from({ length: redCaptured }).map((_, i) => (
-                    <div key={i} className="mini-piece black captured" style={{ width: 10, height: 10, margin: 0 }} title="Captured Black Piece" />
-                  ))}
-                </div>
-              </div>
-              {diff > 0 && (
-                <span style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: 11 }}>
-                  +{diff}
-                </span>
-              )}
-            </div>
-
-            {/* AI DECISION ACTION BUTTON */}
-            {currentTurn === 'black' && pendingAIMove && !isAnimating && (
-              <button
-                className="play-button"
-                onClick={handleExecuteAIMove}
-                style={{
-                  width: 400,
-                  height: 38,
-                  fontSize: 13,
-                  fontWeight: 'bold',
-                  marginTop: 4,
-                  marginBottom: 8,
-                  letterSpacing: '0.5px',
-                  boxShadow: '0 0 15px rgba(179, 139, 89, 0.3)',
-                  animation: 'pulse-border 1.5s infinite ease-in-out'
-                }}
-              >
-                Execute Best AI Move
-              </button>
-            )}
-
-            <div className="controls-bar" style={{ width: 400, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="control-btn small" onClick={() => setPage('landing')} style={{ height: 32 }}>Exit</button>
-                <button className="control-btn icon-btn small" onClick={handleUndo} title="Undo Last Move" style={{ width: 32, height: 32, fontSize: 16 }}>⟲</button>
-                <button className="control-btn icon-btn small" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Toggle Theme" style={{ width: 32, height: 32 }}>
-                  {theme === 'dark' ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
-                  )}
-                </button>
-                <button className="control-btn icon-btn small" onClick={() => setTourActive(true)} title="Restart Tour" style={{ width: 32, height: 32, fontSize: 16 }}>?</button>
-              </div>
-            </div>
+          </div>
 
             {/* ANIMATION OVERLAY */}
             {isAnimating && exploredCount > 0 && exploredCount < (analysis?.total_explored || 0) && (
@@ -600,24 +641,16 @@ function App() {
                 </div>
               </div>
             )}
-          </div>
-
+          
           {/* RIGHT: ANALYSIS */}
           <div id="analysis-panel">
             {/* TOP MOVES CARD */}
             {isPreviewMode ? (
               <div className="analysis-card" style={{ border: '1px solid var(--accent-gold)', background: 'rgba(179, 139, 89, 0.05)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div className="analysis-header" style={{ borderBottom: '1px solid var(--accent-gold)', paddingBottom: 6, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="analysis-header" style={{ borderBottom: '1px solid var(--accent-gold)', paddingBottom: 6, marginBottom: 4 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>♟️ Strategy Trace Explorer</span>
                   </span>
-                  <button
-                    className="control-btn small"
-                    onClick={handleExitPreview}
-                    style={{ height: 22, padding: '0 8px', fontSize: 10 }}
-                  >
-                    Exit Preview
-                  </button>
                 </div>
 
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
@@ -663,75 +696,11 @@ function App() {
                     );
                   })}
                 </div>
-
-                {/* METRICS FOR ACTIVE STEP */}
-                {decisionPath[activePathStepIndex] && (
-                  <div style={{ background: 'var(--bg-panel)', borderRadius: 8, padding: 12, border: '1px solid var(--bg-panel-border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        Step Evaluation
-                        <button
-                          className="glossary-toggle-btn"
-                          onClick={() => setExplainerNode(decisionPath[activePathStepIndex])}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--accent-gold)',
-                            fontSize: '10px',
-                            cursor: 'pointer',
-                            padding: '0 4px',
-                            textDecoration: 'underline',
-                            fontWeight: 600
-                          }}
-                        >
-                          (Explain Math)
-                        </button>
-                      </span>
-                      <span style={{
-                        fontSize: 13,
-                        fontWeight: 'bold',
-                        color: decisionPath[activePathStepIndex].score >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)'
-                      }}>
-                        Score: {decisionPath[activePathStepIndex].score === 0 ? '0 (Even)' : (decisionPath[activePathStepIndex].score > 0 ? `+${decisionPath[activePathStepIndex].score}` : decisionPath[activePathStepIndex].score)}
-                      </span>
-                    </div>
-
-                    {decisionPath[activePathStepIndex].score_breakdown ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                        <div className="explainer-card-mini" style={{ padding: '6px 4px', background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Material</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, justifyContent: 'center' }}>
-                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: (decisionPath[activePathStepIndex].score_breakdown.Pieces || 0) >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}></div>
-                            <span style={{ fontSize: 11 }}>{Math.abs(decisionPath[activePathStepIndex].score_breakdown.Pieces || 0)}</span>
-                          </div>
-                        </div>
-                        <div className="explainer-card-mini" style={{ padding: '6px 4px', background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Kings</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, justifyContent: 'center' }}>
-                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: (decisionPath[activePathStepIndex].score_breakdown.Kings || 0) >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}></div>
-                            <span style={{ fontSize: 11 }}>{Math.abs(decisionPath[activePathStepIndex].score_breakdown.Kings || 0)}</span>
-                          </div>
-                        </div>
-                        <div className="explainer-card-mini" style={{ padding: '6px 4px', background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Safety</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, justifyContent: 'center' }}>
-                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: (decisionPath[activePathStepIndex].score_breakdown.Position || 0) >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}></div>
-                            <span style={{ fontSize: 11 }}>{Math.abs(decisionPath[activePathStepIndex].score_breakdown.Position || 0)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '6px 0' }}>
-                        No direct heuristic breakdown (value inherited from child node)
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             ) : (
               analysis && analysis.top_moves.length > 0 && (
                 <div className="analysis-card">
-                  <div className="analysis-header" style={{ color: 'var(--accent-gold)' }}>AI Strategy Analysis</div>
+                  <div className="analysis-header" style={{ color: 'var(--accent-gold)' }}>Next Optimal AI Strategies</div>
                   <div className="top-moves-list">
                     {analysis.top_moves.map((m, i) => {
                       const rankLabel = ["Best Move", "2nd Best", "3rd Best"][i] || `Move ${i + 1}`;

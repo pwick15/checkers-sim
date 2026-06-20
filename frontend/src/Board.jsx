@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 
-const SQUARE_SIZE = 400 / 8;
+const SQUARE_SIZE = 480 / 8;
 const LIGHT_COLORS = {
     boardLight: "#e6dfd1",
     boardDark: "#a08c78",
@@ -104,12 +104,7 @@ export default function Board({ board, validMoves = [], selectedPiece, lastMove,
             drawPiece(ctx, dragging.piece, dragging.x, dragging.y);
         }
 
-        // Draw preview border
-        if (isPreview) {
-            ctx.strokeStyle = COLORS.king;
-            ctx.lineWidth = 4;
-            ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-        }
+        // Draw preview border (Removed inner border as wrapper handles it)
 
     }, [board, validMoves, selectedPiece, dragging, theme, isPreview]);
 
@@ -203,8 +198,8 @@ export default function Board({ board, validMoves = [], selectedPiece, lastMove,
         <canvas
             ref={canvasRef}
             id="board-canvas"
-            width={400}
-            height={400}
+            width={480}
+            height={480}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}

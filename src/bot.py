@@ -450,8 +450,8 @@ class MinimaxBot(BotPlayer):
                             else:
                                 child_node = None
 
-                            # Next turn is Black (Minimizer)
-                            res = self._minimax(game_copy, depth - 1, False, child_node)
+                            # Next turn is determined by game state (handling multi-jumps)
+                            res = self._minimax(game_copy, depth - 1, game_copy.current_turn == 'red', child_node)
                             score = res['score']
                             if child_node:
                                 child_node.score = score
@@ -494,8 +494,8 @@ class MinimaxBot(BotPlayer):
                             else:
                                 child_node = None
 
-                            # Next turn is Red (Maximizer)
-                            res = self._minimax(game_copy, depth - 1, True, child_node)
+                            # Next turn is determined by game state (handling multi-jumps)
+                            res = self._minimax(game_copy, depth - 1, game_copy.current_turn == 'red', child_node)
                             score = res['score']
                             if child_node:
                                 child_node.score = score
@@ -694,8 +694,8 @@ class AlphaBetaBot(MinimaxBot):
                 game_copy = self._copy_game(game)
                 game_copy.play_move(child.move[0], child.move[1])
                 
-                # Next turn is Black (Minimizer)
-                res = self._alpha_beta(game_copy, depth - 1, alpha, beta, False, child)
+                # Next turn is determined by game state (handling multi-jumps)
+                res = self._alpha_beta(game_copy, depth - 1, alpha, beta, game_copy.current_turn == 'red', child)
                 score = res['score']
                 child.score = score
                 child.predicted_breakdown = res['breakdown']
@@ -758,8 +758,8 @@ class AlphaBetaBot(MinimaxBot):
                 game_copy = self._copy_game(game)
                 game_copy.play_move(child.move[0], child.move[1])
                 
-                # Next turn is Red (Maximizer)
-                res = self._alpha_beta(game_copy, depth - 1, alpha, beta, True, child)
+                # Next turn is determined by game state (handling multi-jumps)
+                res = self._alpha_beta(game_copy, depth - 1, alpha, beta, game_copy.current_turn == 'red', child)
                 score = res['score']
                 child.score = score
                 child.predicted_breakdown = res['breakdown']
