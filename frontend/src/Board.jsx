@@ -25,7 +25,7 @@ const DARK_COLORS = {
     lastMove: "rgba(179, 139, 89, 0.2)"
 };
 
-export default function Board({ board, validMoves = [], selectedPiece, lastMove, theme = 'dark', onSquareClick }) {
+export default function Board({ board, validMoves = [], selectedPiece, lastMove, theme = 'dark', onSquareClick, isPreview = false }) {
     const COLORS = theme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
     const canvasRef = useRef(null);
     const [dragging, setDragging] = useState(null); // { r, c, x, y }
@@ -103,7 +103,14 @@ export default function Board({ board, validMoves = [], selectedPiece, lastMove,
             drawPiece(ctx, dragging.piece, dragging.x, dragging.y);
         }
 
-    }, [board, validMoves, selectedPiece, dragging, theme]);
+        // Draw preview border
+        if (isPreview) {
+            ctx.strokeStyle = COLORS.king;
+            ctx.lineWidth = 4;
+            ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+        }
+
+    }, [board, validMoves, selectedPiece, dragging, theme, isPreview]);
 
     function drawPiece(ctx, piece, x, y) {
         const radius = SQUARE_SIZE / 2 - 6;

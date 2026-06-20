@@ -88,16 +88,7 @@ const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId, onN
 
     const handleMouseUp = () => setDragging(false);
 
-    useEffect(() => {
-        // Auto-focus highlighted node if present
-        if (highlightedId && layout) {
-            const target = layout.nodes.find(n => n.id === highlightedId);
-            if (target) {
-                // Center on target
-                setTransform({ x: width / 2 - target.x * transform.k, y: height / 2 - target.y * transform.k, k: transform.k });
-            }
-        }
-    }, [highlightedId, layout]); // Only on first load or change
+
 
     if (!tree || !layout) return <div style={{ padding: 20, color: '#666' }}>No tree data available</div>;
 

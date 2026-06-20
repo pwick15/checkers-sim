@@ -12,6 +12,26 @@ const getNotation = (r, c) => {
   return (r * 4) + Math.floor(c / 2) + 1;
 };
 
+const getDecisionPath = (node, nodes) => {
+  if (!node || !nodes) return [];
+  const path = [];
+  let current = node;
+  while (current) {
+    path.unshift(current);
+    if (current.parent_id !== undefined && current.parent_id !== -1) {
+      const parent = nodes.find(n => n.id === current.parent_id);
+      if (parent) {
+        current = parent;
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+  return path;
+};
+
 const MiniBoard = ({ board, lastMove, theme = 'dark' }) => {
   if (!board) return null;
   return (
@@ -105,23 +125,62 @@ function App() {
   const [explainerNode, setExplainerNode] = useState(null); // Node details for score explainer
   const [pruneExplain, setPruneExplain] = useState(false); // To show pruning concept
   const [tourActive, setTourActive] = useState(false);
-  const [showExplainer, setShowExplainer] = useState(false);
-
-  // Preview Mode State
+  const [showExplainer, setShowExplainer] = useState(false);  // Preview Mode State
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewNode, setPreviewNode] = useState(null);
+  const [activePathStepIndex, setActivePathStepIndex] = useState(0);
+  const [pendingAIMove, setPendingAIMove] = useState(null);
+
+  const displayNodes = React.useMemo(() => {
+    if (!analysis || !analysis.nodes) return [];
+    const all = analysis.nodes;
+    const maxDepth = Math.max(...all.map(n => n.depth), 0);
+    return all.filter(n => n.depth === maxDepth || (n.is_leaf && n.depth > 0));
+  }, [analysis]);
+
+  const exploredLeafCount = React.useMemo(() => {
+    return displayNodes.filter(n => n.id <= exploredCount).length;
+  }, [displayNodes, exploredCount]);
+
+  const decisionPath = React.useMemo(() => {
+    if (!previewNode || !analysis || !analysis.nodes) return [];
+    return getDecisionPath(previewNode, analysis.nodes);
+  }, [previewNode, analysis]);
+
+  const previewBoardState = React.useMemo(() => {
+    if (isPreviewMode && decisionPath && decisionPath[activePathStepIndex]) {
+      return decisionPath[activePathStepIndex].board_state;
+    }
+    return null;
+  }, [isPreviewMode, decisionPath, activePathStepIndex]);
+
+  const previewLastMove = React.useMemo(() => {
+    if (isPreviewMode && decisionPath && decisionPath[activePathStepIndex]) {
+      return decisionPath[activePathStepIndex].move;
+    }
+    return null;
+  }, [isPreviewMode, decisionPath, activePathStepIndex]);
 
   const handleSelectPreviewNode = (node) => {
-    if (!node || !node.board_state) return;
-    setDisplayBoard(node.board_state);
+    if (!node) return;
     setIsPreviewMode(true);
     setPreviewNode(node);
+    if (analysis && analysis.nodes) {
+      const path = getDecisionPath(node, analysis.nodes);
+      setActivePathStepIndex(path.length - 1);
+    }
   };
 
   const handleExitPreview = () => {
-    setDisplayBoard(null);
     setIsPreviewMode(false);
     setPreviewNode(null);
+    setActivePathStepIndex(0);
+  };
+
+  const handleExecuteAIMove = () => {
+    if (!pendingAIMove) return;
+    playAIMoves(pendingAIMove.moves, pendingAIMove.states);
+    setPendingAIMove(null);
   };
 
   const requestRef = useRef();
@@ -182,8 +241,11 @@ function App() {
 
   // --- Move Logic ---
   const handleSquareClick = async (row, col) => {
-    // Logic same as before...
-    if (isAnimating || winner || currentTurn !== 'red' || isPreviewMode) return;
+    if (isAnimating || winner || currentTurn !== 'red') return;
+
+    if (isPreviewMode) {
+      handleExitPreview();
+    }
 
     const move = validMoves.find(m => m.row === row && m.col === col);
     if (selectedPiece && move) {
@@ -264,8 +326,9 @@ function App() {
       if (current >= total) {
         current = total;
         setExploredCount(current);
-        setStatus("Best strategy identified. Executing...");
-        setTimeout(() => playAIMoves(aiMoves, aiStates), 300);
+        setStatus("Optimal strategy calculated. Proceed when ready.");
+        setIsAnimating(false);
+        setPendingAIMove({ moves: aiMoves, states: aiStates });
       } else {
         setExploredCount(current);
         const statusIdx = Math.floor((current / total) * statuses.length);
@@ -278,8 +341,10 @@ function App() {
   };
 
   const playAIMoves = async (moves, states) => {
+    setIsAnimating(true);
     try {
       if (!moves || moves.length === 0 || !states || states.length === 0) {
+        setIsAnimating(false);
         return;
       }
 
@@ -306,6 +371,7 @@ function App() {
 
   const handleUndo = async () => {
     handleExitPreview();
+    setPendingAIMove(null);
     await fetch(`/api/game/${gameId}/undo`, { method: 'POST' });
     // Logic to double undo if vs bot... matches original code
     const data = await fetchState(gameId);
@@ -382,8 +448,18 @@ function App() {
         <div className="game-page">
           {/* LEFT: BOARD */}
           <div id="board-area">
-            <div id="board-header" style={{ width: 480, display: 'flex', justifyContent: 'center', marginBottom: 15 }}>
-              <div className={isAnimating ? "pulsing" : ""} style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 500, color: currentTurn === 'red' ? 'var(--text-primary)' : 'var(--accent-gold)', letterSpacing: '0.5px' }}>{status}</div>
+            <div id="board-header" style={{ width: 480, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginBottom: 15 }}>
+              {isAnimating && (
+                <div style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: 'var(--accent-gold)',
+                  boxShadow: '0 0 8px var(--accent-gold)',
+                  animation: 'pulse 1.2s infinite ease-in-out'
+                }}></div>
+              )}
+              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 500, color: currentTurn === 'red' ? 'var(--text-primary)' : 'var(--accent-gold)', letterSpacing: '0.5px' }}>{status}</div>
             </div>
 
             {/* PREVIEW BANNER */}
@@ -401,9 +477,9 @@ function App() {
                 boxSizing: 'border-box'
               }}>
                 <div style={{ fontSize: 13 }}>
-                  <strong style={{ color: 'var(--accent-gold)' }}>Previewing AI Move</strong>
+                  <strong style={{ color: 'var(--accent-gold)' }}>Previewing AI Simulation</strong>
                   <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
-                    Evaluation: {previewNode.score > 0 ? `+${previewNode.score}` : previewNode.score < 0 ? `${previewNode.score}` : 'Even'} | Depth: {previewNode.depth} {previewNode.depth === 1 ? 'step ahead' : 'steps ahead'} {previewNode.move && `| Move: ${getNotation(previewNode.move.from[0], previewNode.move.from[1])} → ${getNotation(previewNode.move.to[0], previewNode.move.to[1])}`}
+                    Step {activePathStepIndex + 1} of {decisionPath.length} | Score: {decisionPath[activePathStepIndex]?.score === 0 ? 'Even' : (decisionPath[activePathStepIndex]?.score > 0 ? `+${decisionPath[activePathStepIndex].score}` : decisionPath[activePathStepIndex]?.score)} {decisionPath[activePathStepIndex]?.move && `| Move: ${getNotation(decisionPath[activePathStepIndex].move.from[0], decisionPath[activePathStepIndex].move.from[1])} → ${getNotation(decisionPath[activePathStepIndex].move.to[0], decisionPath[activePathStepIndex].move.to[1])}`}
                   </div>
                 </div>
                 <button
@@ -433,14 +509,22 @@ function App() {
               )}
             </div>
 
-            <Board
-              board={(hoveredNode && hoveredNode.board_state) || displayBoard || board}
-              validMoves={validMoves}
-              selectedPiece={selectedPiece}
-              onSquareClick={handleSquareClick}
-              lastMove={(hoveredNode && hoveredNode.move) ? hoveredNode.move : (isPreviewMode ? previewNode.move : lastMove)}
-              theme={theme}
-            />
+            <div className={`board-wrapper ${isPreviewMode ? 'preview-active' : ''}`} style={{ width: 480, height: 480, position: 'relative' }}>
+              <Board
+                board={(hoveredNode && hoveredNode.board_state) || previewBoardState || displayBoard || board}
+                validMoves={validMoves}
+                selectedPiece={selectedPiece}
+                onSquareClick={handleSquareClick}
+                lastMove={(hoveredNode && hoveredNode.move) ? hoveredNode.move : (previewLastMove || lastMove)}
+                theme={theme}
+                isPreview={isPreviewMode}
+              />
+              {isPreviewMode && (
+                <div className="preview-indicator-badge">
+                  SIMULATION PREVIEW
+                </div>
+              )}
+            </div>
 
             {/* WHITE (YOU) PROFILE */}
             <div style={{ width: 480, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, fontSize: 13 }}>
@@ -458,6 +542,27 @@ function App() {
                 </span>
               )}
             </div>
+
+            {/* AI DECISION ACTION BUTTON */}
+            {currentTurn === 'black' && pendingAIMove && !isAnimating && (
+              <button
+                className="play-button"
+                onClick={handleExecuteAIMove}
+                style={{
+                  width: 480,
+                  height: 44,
+                  fontSize: 14,
+                  fontWeight: 'bold',
+                  marginTop: 4,
+                  marginBottom: 12,
+                  letterSpacing: '0.5px',
+                  boxShadow: '0 0 15px rgba(179, 139, 89, 0.3)',
+                  animation: 'pulse-border 1.5s infinite ease-in-out'
+                }}
+              >
+                Execute AI Move
+              </button>
+            )}
 
             <div className="controls-bar" style={{ width: 480, marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 10 }}>
@@ -489,61 +594,188 @@ function App() {
           {/* RIGHT: ANALYSIS */}
           <div id="analysis-panel">
             {/* TOP MOVES CARD */}
-            {analysis && analysis.top_moves.length > 0 && (
-              <div className="analysis-card">
-                <div className="analysis-header" style={{ color: 'var(--accent-gold)' }}>AI Strategy Analysis</div>
-                <div className="top-moves-list">
-                  {analysis.top_moves.map((m, i) => {
-                    const rankLabel = ["Best Move", "2nd Best", "3rd Best"][i] || `Move ${i + 1}`;
+            {isPreviewMode ? (
+              <div className="analysis-card" style={{ border: '1px solid var(--accent-gold)', background: 'rgba(179, 139, 89, 0.05)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="analysis-header" style={{ borderBottom: '1px solid var(--accent-gold)', paddingBottom: 6, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>♟️ Strategy Trace Explorer</span>
+                  </span>
+                  <button
+                    className="control-btn small"
+                    onClick={handleExitPreview}
+                    style={{ height: 22, padding: '0 8px', fontSize: 10 }}
+                  >
+                    Exit Preview
+                  </button>
+                </div>
 
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+                  Follow the AI's predicted moves. Click any step to inspect the board state:
+                </div>
+
+                {/* STEPPER */}
+                <div className="step-stepper-container" style={{ display: 'flex', gap: 6, marginBottom: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                  {decisionPath.map((step, idx) => {
+                    const isAITurn = step.depth % 2 !== 0;
+                    const playerLabel = isAITurn ? "AI" : "You";
+                    const fromNot = step.move ? getNotation(step.move.from[0], step.move.from[1]) : "?";
+                    const toNot = step.move ? getNotation(step.move.to[0], step.move.to[1]) : "?";
+                    const isActive = idx === activePathStepIndex;
                     return (
-                      <div
-                        key={i}
-                        className={`top-move-item rank-${i + 1}`}
-                        onMouseEnter={() => setHoveredNode({ ...m, fromList: true })}
-                        onMouseLeave={() => setHoveredNode(null)}
+                      <button
+                        key={idx}
+                        onClick={() => setActivePathStepIndex(idx)}
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          background: isActive ? 'var(--accent-gold)' : 'var(--bg-panel)',
+                          border: `1px solid ${isActive ? 'var(--accent-gold)' : 'var(--bg-panel-border)'}`,
+                          color: isActive ? '#1c1510' : 'var(--text-primary)',
+                          padding: '6px 4px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: isActive ? 600 : 400,
+                          transition: 'all 0.2s ease',
+                          minWidth: '85px'
+                        }}
                       >
-                        <div className="move-info">
-                          <div className="move-notation" style={{ marginBottom: 4 }}>{rankLabel}</div>
-                          <div className="move-sequence">
-                            <FutureMove
-                              move={{ from: m.from_pos, to: m.to_pos, board: m.board_state, score: m.score }}
-                              theme={theme}
-                            />
-                            {m.pv && m.pv.length > 0 && (
-                              <>
-                                <span style={{ fontSize: 10, color: '#666', display: 'flex', alignItems: 'center', margin: '0 2px' }}>→</span>
-                                {m.pv.map((step, idx) => (
-                                  <React.Fragment key={idx}>
-                                    <FutureMove move={step} theme={theme} />
-                                    {idx < m.pv.length - 1 && <span style={{ fontSize: 10, color: '#666', display: 'flex', alignItems: 'center', margin: '0 2px' }}>→</span>}
-                                  </React.Fragment>
-                                ))}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div
-                          className={`move-score clickable-score`}
-                          style={{ color: m.score >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)', fontWeight: 'bold' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExplainerNode(m);
-                          }}
-                        >
-                          {m.score === 0 ? '0' : Math.abs(m.score)}
-                        </div>
-                      </div>
+                        <span style={{ opacity: isActive ? 0.9 : 0.6, fontSize: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Step {idx + 1} ({playerLabel})
+                        </span>
+                        <span style={{ fontSize: '12px', fontWeight: 'bold', marginTop: 2 }}>
+                          {fromNot} → {toNot}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
+
+                {/* METRICS FOR ACTIVE STEP */}
+                {decisionPath[activePathStepIndex] && (
+                  <div style={{ background: 'var(--bg-panel)', borderRadius: 8, padding: 12, border: '1px solid var(--bg-panel-border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        Step Evaluation
+                        <button
+                          className="glossary-toggle-btn"
+                          onClick={() => setExplainerNode(decisionPath[activePathStepIndex])}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--accent-gold)',
+                            fontSize: '10px',
+                            cursor: 'pointer',
+                            padding: '0 4px',
+                            textDecoration: 'underline',
+                            fontWeight: 600
+                          }}
+                        >
+                          (Explain Math)
+                        </button>
+                      </span>
+                      <span style={{
+                        fontSize: 13,
+                        fontWeight: 'bold',
+                        color: decisionPath[activePathStepIndex].score >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)'
+                      }}>
+                        Score: {decisionPath[activePathStepIndex].score === 0 ? '0 (Even)' : (decisionPath[activePathStepIndex].score > 0 ? `+${decisionPath[activePathStepIndex].score}` : decisionPath[activePathStepIndex].score)}
+                      </span>
+                    </div>
+
+                    {decisionPath[activePathStepIndex].score_breakdown ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                        <div className="explainer-card-mini" style={{ padding: '6px 4px', background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Material</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, justifyContent: 'center' }}>
+                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: (decisionPath[activePathStepIndex].score_breakdown.Pieces || 0) >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}></div>
+                            <span style={{ fontSize: 11 }}>{Math.abs(decisionPath[activePathStepIndex].score_breakdown.Pieces || 0)}</span>
+                          </div>
+                        </div>
+                        <div className="explainer-card-mini" style={{ padding: '6px 4px', background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Kings</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, justifyContent: 'center' }}>
+                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: (decisionPath[activePathStepIndex].score_breakdown.Kings || 0) >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}></div>
+                            <span style={{ fontSize: 11 }}>{Math.abs(decisionPath[activePathStepIndex].score_breakdown.Kings || 0)}</span>
+                          </div>
+                        </div>
+                        <div className="explainer-card-mini" style={{ padding: '6px 4px', background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Safety</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, justifyContent: 'center' }}>
+                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: (decisionPath[activePathStepIndex].score_breakdown.Position || 0) >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}></div>
+                            <span style={{ fontSize: 11 }}>{Math.abs(decisionPath[activePathStepIndex].score_breakdown.Position || 0)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '6px 0' }}>
+                        No direct heuristic breakdown (value inherited from child node)
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+            ) : (
+              analysis && analysis.top_moves.length > 0 && (
+                <div className="analysis-card">
+                  <div className="analysis-header" style={{ color: 'var(--accent-gold)' }}>AI Strategy Analysis</div>
+                  <div className="top-moves-list">
+                    {analysis.top_moves.map((m, i) => {
+                      const rankLabel = ["Best Move", "2nd Best", "3rd Best"][i] || `Move ${i + 1}`;
+
+                      return (
+                        <div
+                          key={i}
+                          className={`top-move-item rank-${i + 1}`}
+                          onMouseEnter={() => setHoveredNode({ ...m, fromList: true })}
+                          onMouseLeave={() => setHoveredNode(null)}
+                        >
+                          <div className="move-info">
+                            <div className="move-notation" style={{ marginBottom: 4 }}>{rankLabel}</div>
+                            <div className="move-sequence">
+                              <FutureMove
+                                move={{ from: m.from_pos, to: m.to_pos, board: m.board_state, score: m.score }}
+                                theme={theme}
+                              />
+                              {m.pv && m.pv.length > 0 && (
+                                <>
+                                  <span style={{ fontSize: 10, color: '#666', display: 'flex', alignItems: 'center', margin: '0 2px' }}>→</span>
+                                  {m.pv.map((step, idx) => (
+                                    <React.Fragment key={idx}>
+                                      <FutureMove move={step} theme={theme} />
+                                      {idx < m.pv.length - 1 && <span style={{ fontSize: 10, color: '#666', display: 'flex', alignItems: 'center', margin: '0 2px' }}>→</span>}
+                                    </React.Fragment>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div
+                            className={`move-score clickable-score`}
+                            style={{ color: m.score >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)', fontWeight: 'bold' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExplainerNode(m);
+                            }}
+                          >
+                            {m.score === 0 ? '0' : Math.abs(m.score)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )
             )}
 
             {/* SEARCH GRID CARD */}
             <div className="analysis-card" style={{ display: 'flex', flexDirection: 'column', position: 'relative', flex: 1, minHeight: 0 }}>
               <div className="analysis-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Search Space ({exploredCount} / {analysis?.total_explored || 0})</span>
+                <span>
+                  {isAnimating ? "Search Space (Simulating...)" : `Search Space (${displayNodes.length} leaf states)`}
+                </span>
 
                 <div style={{ display: 'flex', gap: 10 }}>
                   {/* SPEED CONTROL */}
@@ -586,8 +818,6 @@ function App() {
                   onNodeClick={(node) => {
                     if (node.is_pruned) {
                       setPruneExplain(true);
-                    } else {
-                      setExplainerNode(node);
                     }
                     handleSelectPreviewNode(node);
                   }}
@@ -657,8 +887,6 @@ function App() {
             onNodeClick={(node) => {
               if (node.is_pruned) {
                 setPruneExplain(true);
-              } else {
-                setExplainerNode(node);
               }
               handleSelectPreviewNode(node);
             }}

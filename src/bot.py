@@ -279,6 +279,7 @@ class MinimaxBot(BotPlayer):
                 'depth': node.depth,
                 'score': node.score,
                 'is_pruned': node.is_pruned,
+                'is_leaf': len(node.children) == 0,
                 'type': 'max' if node.depth % 2 != 0 else 'min', # Root is depth 0 (max's turn to choose), Depth 1 is resulting state (min's turn)
                 # Wait, depth 0 is Us (Max). Children are Depth 1.
                 # Depth 1 nodes are the states AFTER we moved. So at Depth 1, it is Opponent's turn (Min).

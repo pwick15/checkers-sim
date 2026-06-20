@@ -1152,3 +1152,41 @@
     50% { opacity: 1; }
     100% { opacity: 0.6; }
 }
+
+/* Board Preview Styling */
+.board-wrapper {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    border: 3px solid transparent;
+}
+
+.board-wrapper.preview-active {
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 25px rgba(179, 139, 89, 0.4);
+}
+
+.preview-indicator-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(28, 21, 16, 0.95);
+    border: 1px solid var(--accent-gold);
+    color: var(--accent-gold);
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    pointer-events: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    animation: pulse 1.6s infinite ease-in-out;
+}
+
+/* Pulse Border keyframe for Executive AI Move button */
+@keyframes pulse-border {
+    0% { box-shadow: 0 0 0 0px rgba(179, 139, 89, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(179, 139, 89, 0); }
+    100% { box-shadow: 0 0 0 0px rgba(179, 139, 89, 0); }
+}

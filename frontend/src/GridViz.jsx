@@ -24,16 +24,23 @@ export default function GridViz({
         return () => obs.disconnect();
     }, []);
 
+    // Filter to only show leaf nodes (depth === maxDepth or (is_leaf && depth > 0))
+    const displayNodes = useMemo(() => {
+        if (allNodes.length === 0) return [];
+        const maxDepth = Math.max(...allNodes.map(n => n.depth), 0);
+        return allNodes.filter(n => n.depth === maxDepth || (n.is_leaf && n.depth > 0));
+    }, [allNodes]);
+
     // Calculate Layout
     const layout = useMemo(() => {
         const canvasWidth = containerWidth;
         const PADDING = 10;
         const availWidth = canvasWidth - PADDING * 2;
 
-        if (allNodes.length === 0 || availWidth <= 0)
+        if (displayNodes.length === 0 || availWidth <= 0)
             return { positions: [], width: canvasWidth, height: 100, dotSize: 4 };
 
-        const count = allNodes.length;
+        const count = displayNodes.length;
 
         // Dynamic sizing based on density
         let dotSize = 10;
@@ -49,14 +56,14 @@ export default function GridViz({
         const rows = Math.ceil(count / cols);
         const totalHeight = rows * spacing + PADDING * 2;
 
-        const positions = allNodes.map((node, i) => ({
+        const positions = displayNodes.map((node, i) => ({
             x: PADDING + (i % cols) * spacing,
             y: PADDING + Math.floor(i / cols) * spacing,
             node
         }));
 
         return { positions, dotSize, width: canvasWidth, height: Math.max(100, totalHeight) };
-    }, [allNodes, containerWidth]);
+    }, [displayNodes, containerWidth]);
 
 
     useEffect(() => {
@@ -134,8 +141,8 @@ export default function GridViz({
         const accentGoldHover = style.getPropertyValue('--accent-gold-hover').trim() || '#cca472';
         const textMuted = style.getPropertyValue('--text-muted').trim() || '#8c8279';
 
-        positions.forEach((p, i) => {
-            const isExplored = i < exploredCount;
+        positions.forEach((p) => {
+            const isExplored = p.node.id < exploredCount;
             if (!isExplored) {
                 // Faint placeholder
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
