@@ -19,7 +19,7 @@ const getDecisionPath = (node, nodes) => {
   while (current) {
     path.unshift(current);
     if (current.parent_id !== undefined && current.parent_id !== -1) {
-      const parent = nodes.find(n => n.id === current.parent_id);
+      const parent = nodes.find(n => Number(n.id) === Number(current.parent_id));
       if (parent) {
         current = parent;
       } else {
@@ -176,6 +176,17 @@ function App() {
     setPreviewNode(null);
     setActivePathStepIndex(0);
   };
+
+  React.useEffect(() => {
+    if (isPreviewMode) {
+      console.log("Preview trace info:", {
+        activePathStepIndex,
+        previewNode,
+        decisionPathLength: decisionPath.length,
+        previewBoardStatePresent: !!previewBoardState
+      });
+    }
+  }, [isPreviewMode, activePathStepIndex, previewNode, decisionPath, previewBoardState]);
 
   const handleExecuteAIMove = () => {
     if (!pendingAIMove) return;
@@ -448,7 +459,7 @@ function App() {
         <div className="game-page">
           {/* LEFT: BOARD */}
           <div id="board-area">
-            <div id="board-header" style={{ width: 480, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginBottom: 15 }}>
+            <div id="board-header" style={{ width: 400, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               {isAnimating && (
                 <div style={{
                   width: 8,
@@ -459,33 +470,33 @@ function App() {
                   animation: 'pulse 1.2s infinite ease-in-out'
                 }}></div>
               )}
-              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 500, color: currentTurn === 'red' ? 'var(--text-primary)' : 'var(--accent-gold)', letterSpacing: '0.5px' }}>{status}</div>
+              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 20, fontWeight: 500, color: currentTurn === 'red' ? 'var(--text-primary)' : 'var(--accent-gold)', letterSpacing: '0.5px' }}>{status}</div>
             </div>
 
             {/* PREVIEW BANNER */}
             {isPreviewMode && previewNode && (
               <div style={{
-                width: 480,
+                width: 400,
                 background: 'rgba(179, 139, 89, 0.12)',
                 border: '1px solid var(--accent-gold)',
                 borderRadius: '8px',
-                padding: '10px 14px',
-                marginBottom: 12,
+                padding: '8px 12px',
+                marginBottom: 8,
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 boxSizing: 'border-box'
               }}>
-                <div style={{ fontSize: 13 }}>
+                <div style={{ fontSize: 12 }}>
                   <strong style={{ color: 'var(--accent-gold)' }}>Previewing AI Simulation</strong>
-                  <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
+                  <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>
                     Step {activePathStepIndex + 1} of {decisionPath.length} | Score: {decisionPath[activePathStepIndex]?.score === 0 ? 'Even' : (decisionPath[activePathStepIndex]?.score > 0 ? `+${decisionPath[activePathStepIndex].score}` : decisionPath[activePathStepIndex]?.score)} {decisionPath[activePathStepIndex]?.move && `| Move: ${getNotation(decisionPath[activePathStepIndex].move.from[0], decisionPath[activePathStepIndex].move.from[1])} → ${getNotation(decisionPath[activePathStepIndex].move.to[0], decisionPath[activePathStepIndex].move.to[1])}`}
                   </div>
                 </div>
                 <button
                   className="play-button small"
                   onClick={handleExitPreview}
-                  style={{ height: '26px', padding: '0 10px', fontSize: '11px', flexShrink: 0 }}
+                  style={{ height: '24px', padding: '0 8px', fontSize: '10px', flexShrink: 0 }}
                 >
                   Exit Preview
                 </button>
@@ -493,23 +504,23 @@ function App() {
             )}
 
             {/* BLACK (AI) PROFILE */}
-            <div style={{ width: 480, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 13 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 400, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>BLACK (AI)</span>
                 <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                   {Array.from({ length: blackCaptured }).map((_, i) => (
-                    <div key={i} className="mini-piece red captured" style={{ width: 12, height: 12, margin: 0 }} title="Captured White Piece" />
+                    <div key={i} className="mini-piece red captured" style={{ width: 10, height: 10, margin: 0 }} title="Captured White Piece" />
                   ))}
                 </div>
               </div>
               {diff < 0 && (
-                <span style={{ fontWeight: 'bold', color: 'var(--accent-gold)', fontSize: 12 }}>
+                <span style={{ fontWeight: 'bold', color: 'var(--accent-gold)', fontSize: 11 }}>
                   +{Math.abs(diff)}
                 </span>
               )}
             </div>
 
-            <div className={`board-wrapper ${isPreviewMode ? 'preview-active' : ''}`} style={{ width: 480, height: 480, position: 'relative' }}>
+            <div className={`board-wrapper ${isPreviewMode ? 'preview-active' : ''}`} style={{ width: 400, height: 400, position: 'relative' }}>
               <Board
                 board={(hoveredNode && hoveredNode.board_state) || previewBoardState || displayBoard || board}
                 validMoves={validMoves}
@@ -527,17 +538,17 @@ function App() {
             </div>
 
             {/* WHITE (YOU) PROFILE */}
-            <div style={{ width: 480, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, fontSize: 13 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 400, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 6, fontSize: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>WHITE (YOU)</span>
                 <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                   {Array.from({ length: redCaptured }).map((_, i) => (
-                    <div key={i} className="mini-piece black captured" style={{ width: 12, height: 12, margin: 0 }} title="Captured Black Piece" />
+                    <div key={i} className="mini-piece black captured" style={{ width: 10, height: 10, margin: 0 }} title="Captured Black Piece" />
                   ))}
                 </div>
               </div>
               {diff > 0 && (
-                <span style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: 12 }}>
+                <span style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: 11 }}>
                   +{diff}
                 </span>
               )}
@@ -549,12 +560,12 @@ function App() {
                 className="play-button"
                 onClick={handleExecuteAIMove}
                 style={{
-                  width: 480,
-                  height: 44,
-                  fontSize: 14,
+                  width: 400,
+                  height: 38,
+                  fontSize: 13,
                   fontWeight: 'bold',
                   marginTop: 4,
-                  marginBottom: 12,
+                  marginBottom: 8,
                   letterSpacing: '0.5px',
                   boxShadow: '0 0 15px rgba(179, 139, 89, 0.3)',
                   animation: 'pulse-border 1.5s infinite ease-in-out'
@@ -564,18 +575,18 @@ function App() {
               </button>
             )}
 
-            <div className="controls-bar" style={{ width: 480, marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button className="control-btn" onClick={() => setPage('landing')}>Exit</button>
-                <button className="control-btn icon-btn" onClick={handleUndo} title="Undo Last Move">⟲</button>
-                <button className="control-btn icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Toggle Theme">
+            <div className="controls-bar" style={{ width: 400, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="control-btn small" onClick={() => setPage('landing')} style={{ height: 32 }}>Exit</button>
+                <button className="control-btn icon-btn small" onClick={handleUndo} title="Undo Last Move" style={{ width: 32, height: 32, fontSize: 16 }}>⟲</button>
+                <button className="control-btn icon-btn small" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Toggle Theme" style={{ width: 32, height: 32 }}>
                   {theme === 'dark' ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
                   ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
                   )}
                 </button>
-                <button className="control-btn icon-btn" onClick={() => setTourActive(true)} title="Restart Tour">?</button>
+                <button className="control-btn icon-btn small" onClick={() => setTourActive(true)} title="Restart Tour" style={{ width: 32, height: 32, fontSize: 16 }}>?</button>
               </div>
             </div>
 

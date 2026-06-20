@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 
-const SQUARE_SIZE = 480 / 8;
+const SQUARE_SIZE = 400 / 8;
 const LIGHT_COLORS = {
     boardLight: "#e6dfd1",
     boardDark: "#a08c78",
@@ -31,6 +31,7 @@ export default function Board({ board, validMoves = [], selectedPiece, lastMove,
     const [dragging, setDragging] = useState(null); // { r, c, x, y }
 
     useEffect(() => {
+        console.log("Board useEffect running - board is:", board);
         const canvas = canvasRef.current;
         if (!canvas || !board) return;
         const ctx = canvas.getContext('2d');
@@ -202,8 +203,8 @@ export default function Board({ board, validMoves = [], selectedPiece, lastMove,
         <canvas
             ref={canvasRef}
             id="board-canvas"
-            width={480}
-            height={480}
+            width={400}
+            height={400}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}

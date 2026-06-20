@@ -180,11 +180,11 @@
 
 .game-page {
     display: grid;
-    grid-template-columns: minmax(500px, 1fr) minmax(400px, 600px);
-    gap: 20px;
+    grid-template-columns: minmax(420px, 1fr) minmax(400px, 600px);
+    gap: 12px;
     width: 100%;
-    height: calc(100vh - 56px); /* Account for bottom floating status bar and margins */
-    padding: 20px 20px 10px 20px;
+    height: calc(100vh - 48px); /* Account for bottom floating status bar and margins */
+    padding: 10px 15px 5px 15px;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -199,9 +199,9 @@
 }
 
 #board-header {
-    margin-bottom: 20px;
+    margin-bottom: 8px;
     display: flex;
-    gap: 20px;
+    gap: 15px;
     align-items: center;
 }
 
@@ -209,10 +209,10 @@
 #analysis-panel {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 12px;
     height: 100%;
     overflow: visible;
-    padding: 10px 0;
+    padding: 5px 0;
     box-sizing: border-box;
     position: relative;
 }
