@@ -167,7 +167,7 @@ function App() {
     setPreviewNode(node);
     if (analysis && analysis.nodes) {
       const path = getDecisionPath(node, analysis.nodes);
-      setActivePathStepIndex(path.length - 1);
+      setActivePathStepIndex(0);
     }
   };
 
@@ -479,9 +479,9 @@ function App() {
                 className="control-btn icon-btn" 
                 onClick={() => setPage('landing')} 
                 title="Exit Game"
-                style={{ width: 36, height: 36, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                style={{ width: 36, height: 36, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               >
-                🚪
+                ←
               </button>
               
               {/* UNDO */}
