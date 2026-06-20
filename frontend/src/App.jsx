@@ -750,20 +750,9 @@ function App() {
                   </div>
                 </div>
 
-                <div className="explainer-main-content" style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 20 }}>
-                  {/* LEFT: TARGET BOARD */}
-                  <div className="target-board-column">
-                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 8, textAlign: 'center' }}>STRATEGIC OUTCOME</div>
-                    <div style={{ padding: 10, background: '#000', borderRadius: 8, border: '1px solid #333' }}>
-                      <MiniBoard board={explainerNode.board_state} theme={theme} />
-                    </div>
-                    <p style={{ fontSize: 10, color: '#666', marginTop: 8, textAlign: 'center', lineHeight: 1.4 }}>
-                      The AI predicts this board state will be reached if both players play optimally from here.
-                    </p>
-                  </div>
-
-                  {/* RIGHT: MATH */}
-                  <div className="math-column">
+                <div className="explainer-main-content">
+                  {/* MATH DETAILS */}
+                  <div className="math-column" style={{ width: '100%' }}>
                     {/* VISUAL BREAKDOWN CARDS */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 25 }}>
                       <div className="explainer-card-mini">

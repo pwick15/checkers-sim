@@ -183,7 +183,7 @@
     grid-template-columns: minmax(500px, 1fr) minmax(400px, 600px);
     gap: 20px;
     width: 100%;
-    height: calc(100vh - 32px); /* Account for bottom status bar */
+    height: calc(100vh - 56px); /* Account for bottom floating status bar and margins */
     padding: 20px 20px 10px 20px;
     box-sizing: border-box;
     overflow: hidden;
@@ -741,6 +741,8 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: 24px;
+    box-sizing: border-box;
 }
 
 .modal-content {
@@ -764,6 +766,10 @@
     font-family: var(--font-serif);
     font-size: 32px;
     margin-bottom: 20px;
+}
+
+.explainer-modal {
+    max-width: 640px !important;
 }
 
 .explainer-modal h3 {
@@ -798,11 +804,12 @@
 /* Status Bar */
 .status-bar {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
+    bottom: 12px;
+    left: 12px;
+    width: calc(100% - 24px);
     background: var(--bg-panel);
-    border-top: 1px solid var(--bg-panel-border);
+    border: 1px solid var(--bg-panel-border);
+    border-radius: 8px;
     padding: 8px 16px;
     font-size: 11px;
     color: var(--text-muted);
@@ -812,6 +819,7 @@
     z-index: 500;
     height: 32px;
     box-sizing: border-box;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 .animation-overlay {
