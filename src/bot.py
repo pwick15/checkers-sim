@@ -706,6 +706,11 @@ class AlphaBetaBot(MinimaxBot):
                         sibling_to_prune.is_pruned = True
                         sibling_to_prune.visit_order = self.visit_counter
                         self.visit_counter += 1
+                        
+                        # Generate simulated board state for pruned sibling so hovering works smoothly
+                        game_copy = self._copy_game(game)
+                        game_copy.play_move(sibling_to_prune.move[0], sibling_to_prune.move[1])
+                        sibling_to_prune.board_state = self._serialize_board(game_copy.board)
                     return best_meta if best_meta else res
             
             if max_score == float('-inf'):
@@ -763,6 +768,11 @@ class AlphaBetaBot(MinimaxBot):
                         sibling_to_prune.is_pruned = True
                         sibling_to_prune.visit_order = self.visit_counter
                         self.visit_counter += 1
+                        
+                        # Generate simulated board state for pruned sibling so hovering works smoothly
+                        game_copy = self._copy_game(game)
+                        game_copy.play_move(sibling_to_prune.move[0], sibling_to_prune.move[1])
+                        sibling_to_prune.board_state = self._serialize_board(game_copy.board)
                     return best_meta if best_meta else res
 
             if min_score == float('inf'):

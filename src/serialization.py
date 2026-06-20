@@ -122,7 +122,8 @@ def serialize_tree_for_web(root, bot_instance=None, game_instance=None):
             "is_pruned": node.is_pruned,
             "move": move,
             "move_notation": move_notation,
-            "score_breakdown": getattr(node, "score_breakdown", None)
+            "score_breakdown": getattr(node, "score_breakdown", None),
+            "board_state": getattr(node, "board_state", None)
         })
         for child in node.children:
             child_id = walk(child)

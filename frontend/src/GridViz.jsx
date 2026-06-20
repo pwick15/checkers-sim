@@ -73,22 +73,35 @@ export default function GridViz({
 
             let found = null;
             let bestDist = Infinity;
-            const radiusSq = (layout.dotSize / 2 + 4) ** 2; // Hit radius
+            const maxDistance = 40; // Expand hit area smoothly to avoid flickering in between dots
+            const maxDistanceSq = maxDistance * maxDistance;
 
             for (let p of layout.positions) {
                 const dx = mouseX - (p.x + layout.dotSize / 2); // Center align
                 const dy = mouseY - (p.y + layout.dotSize / 2);
                 const d2 = dx * dx + dy * dy;
-                if (d2 < radiusSq && d2 < bestDist) {
+                if (d2 < bestDist) {
                     bestDist = d2;
-                    found = p.node;
+                    if (d2 < maxDistanceSq) {
+                        found = p.node;
+                    }
                 }
             }
             setHoveredNode(found);
             if (onNodeHover) onNodeHover(found);
+
+            if (found) {
+                canvas.style.cursor = 'pointer';
+            } else {
+                canvas.style.cursor = 'crosshair';
+            }
         };
         // ... listeners ...
-        const handleLeave = () => { setHoveredNode(null); if (onNodeHover) onNodeHover(null); };
+        const handleLeave = () => { 
+            setHoveredNode(null); 
+            if (onNodeHover) onNodeHover(null); 
+            canvas.style.cursor = 'crosshair';
+        };
         const handleClick = () => { if (hoveredNode && onNodeClick) onNodeClick(hoveredNode); };
 
         canvas.addEventListener('mousemove', checkHover);

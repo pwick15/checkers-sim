@@ -101,6 +101,7 @@ function App() {
   const [showTree, setShowTree] = useState(false);
 
   // Educational State
+  const [showGlossary, setShowGlossary] = useState(false);
   const [explainerNode, setExplainerNode] = useState(null); // Node details for score explainer
   const [pruneExplain, setPruneExplain] = useState(false); // To show pruning concept
   const [tourActive, setTourActive] = useState(false);
@@ -402,7 +403,7 @@ function App() {
                 <div style={{ fontSize: 13 }}>
                   <strong style={{ color: 'var(--accent-gold)' }}>Previewing AI Move</strong>
                   <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
-                    Depth: {previewNode.depth} | Score: {previewNode.score} {previewNode.move && `| Move: ${getNotation(previewNode.move.from[0], previewNode.move.from[1])} → ${getNotation(previewNode.move.to[0], previewNode.move.to[1])}`}
+                    Evaluation: {previewNode.score > 0 ? `+${previewNode.score}` : previewNode.score < 0 ? `${previewNode.score}` : 'Even'} | Depth: {previewNode.depth} {previewNode.depth === 1 ? 'step ahead' : 'steps ahead'} {previewNode.move && `| Move: ${getNotation(previewNode.move.from[0], previewNode.move.from[1])} → ${getNotation(previewNode.move.to[0], previewNode.move.to[1])}`}
                   </div>
                 </div>
                 <button
@@ -433,11 +434,11 @@ function App() {
             </div>
 
             <Board
-              board={displayBoard || board}
+              board={(hoveredNode && hoveredNode.board_state) || displayBoard || board}
               validMoves={validMoves}
               selectedPiece={selectedPiece}
               onSquareClick={handleSquareClick}
-              lastMove={isPreviewMode ? previewNode.move : lastMove}
+              lastMove={(hoveredNode && hoveredNode.move) ? hoveredNode.move : (isPreviewMode ? previewNode.move : lastMove)}
               theme={theme}
             />
 
@@ -583,31 +584,49 @@ function App() {
                   exploredCount={exploredCount}
                   onNodeHover={setHoveredNode}
                   onNodeClick={(node) => {
+                    if (node.is_pruned) {
+                      setPruneExplain(true);
+                    } else {
+                      setExplainerNode(node);
+                    }
                     handleSelectPreviewNode(node);
                   }}
                 />
 
                 {/* LEGEND */}
-                <div className="legend">
+                <div className="legend" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                   <div className="legend-item"><div className="dot explored-max"></div> Explored (Max)</div>
                   <div className="legend-item"><div className="dot explored-min"></div> Explored (Min)</div>
                   <div className="legend-item"><div className="dot pruned">×</div> Pruned</div>
                   <div className="legend-item"><div className="dot top-path"></div> Best Path</div>
+                  <button 
+                    className="glossary-toggle-btn"
+                    onClick={() => setShowGlossary(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--accent-gold)',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      padding: '0 4px',
+                      textDecoration: 'underline',
+                      marginLeft: 'auto',
+                      fontWeight: 600
+                    }}
+                  >
+                    ⓘ Explain Metrics
+                  </button>
                 </div>
 
-                {/* TOOLTIP OVERLAY */}
+                 {/* TOOLTIP OVERLAY */}
                 {hoveredNode && !hoveredNode.fromList && (
-                  <div className="inspector-tooltip" style={{ bottom: 10, left: 10, pointerEvents: 'auto', cursor: 'pointer' }}
-                    onClick={() => {
-                      if (hoveredNode.is_pruned) setPruneExplain(true);
-                      else setExplainerNode(hoveredNode);
-                    }}>
-                    <div className="inspector-row"><span className="label">Score</span> <span className="value">{hoveredNode.score}</span></div>
-                    <div className="inspector-row"><span className="label">Depth</span> <span className="value">{hoveredNode.depth}</span></div>
-                    <div className="inspector-row"><span className="label">Type</span> <span className="value">{hoveredNode.type?.toUpperCase()}</span></div>
+                  <div className="inspector-tooltip" style={{ bottom: 10, left: 10, pointerEvents: 'none', minWidth: '180px' }}>
+                    <div className="inspector-row"><span className="label">Evaluation</span> <span className="value" style={{ color: hoveredNode.score > 0 ? 'var(--text-primary)' : hoveredNode.score < 0 ? 'var(--accent-gold)' : 'var(--text-muted)' }}>{hoveredNode.score > 0 ? `+${hoveredNode.score}` : hoveredNode.score < 0 ? `${hoveredNode.score}` : '0 (Even)'}</span></div>
+                    <div className="inspector-row"><span className="label">Depth</span> <span className="value">{hoveredNode.depth} {hoveredNode.depth === 1 ? 'step ahead' : 'steps ahead'}</span></div>
+                    <div className="inspector-row"><span className="label">Simulated Turn</span> <span className="value">{hoveredNode.type === 'max' ? 'AI Turn' : 'Your Turn'}</span></div>
                     {hoveredNode.is_pruned && <div style={{ color: '#ff5252', marginTop: 4, fontWeight: 'bold' }}>PRUNED (Cutoff)</div>}
                     <div style={{ marginTop: 8, fontSize: 10, color: '#aaa', borderTop: '1px solid #333', paddingTop: 4 }}>
-                      {hoveredNode.is_pruned ? "Click to learn why this was skipped" : "Click to see scoring breakdown"}
+                      {hoveredNode.is_pruned ? "Click dot to see prune explanation" : "Click dot to see scoring breakdown"}
                     </div>
                   </div>
                 )}
@@ -635,7 +654,15 @@ function App() {
             inputWidth={window.innerWidth * 0.6}
             height={window.innerHeight - 60}
             onClose={() => setShowTree(false)}
-            onNodeClick={handleSelectPreviewNode}
+            onNodeClick={(node) => {
+              if (node.is_pruned) {
+                setPruneExplain(true);
+              } else {
+                setExplainerNode(node);
+              }
+              handleSelectPreviewNode(node);
+            }}
+            onNodeHover={setHoveredNode}
           />
         </div>
       </div>
@@ -649,6 +676,52 @@ function App() {
             <div style={{ display: 'flex', gap: 15, justifyContent: 'center', marginTop: 30 }}>
               <button className="play-button" onClick={handleStartGame}>New Game</button>
               <button className="control-btn" onClick={() => setPage('landing')}>Main Menu</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GLOSSARY MODAL */}
+      {showGlossary && (
+        <div className="modal-overlay" onClick={() => setShowGlossary(false)}>
+          <div className="modal-content explainer-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 450, padding: 25 }}>
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: 15, marginTop: 0, fontSize: 18, fontFamily: 'var(--font-serif)' }}>AI Search Metrics Glossary</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontSize: 13, lineHeight: 1.4, textAlign: 'left' }}>
+              <div>
+                <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>📊 Evaluation Score</strong>
+                <p style={{ margin: 0, color: '#aaa' }}>
+                  The numerical score represents who is winning in that simulated future state.
+                </p>
+                <ul style={{ margin: '6px 0 0 16px', padding: 0, color: '#aaa' }}>
+                  <li><strong style={{ color: 'var(--text-primary)' }}>Positive Score (+1 to +10)</strong>: Advantage White (You)</li>
+                  <li><strong style={{ color: 'var(--accent-gold)' }}>Negative Score (-1 to -10)</strong>: Advantage Black (AI)</li>
+                  <li><strong style={{ color: 'var(--text-muted)' }}>0 (Even Score)</strong>: Equal material and position balance</li>
+                </ul>
+              </div>
+
+              <div>
+                <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>⏱️ Search Depth</strong>
+                <p style={{ margin: 0, color: '#aaa' }}>
+                  How many half-turns (plies) the AI looks ahead.
+                  For instance, <strong style={{ color: 'var(--accent-gold)' }}>Depth 3</strong> means the AI has simulated its potential move, your response, and then its counter-response.
+                </p>
+              </div>
+
+              <div>
+                <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>🔄 Simulated Turn (Minimax Type)</strong>
+                <p style={{ margin: 0, color: '#aaa' }}>
+                  In game theory, players alternate goals:
+                </p>
+                <ul style={{ margin: '6px 0 0 16px', padding: 0, color: '#aaa' }}>
+                  <li><strong style={{ color: 'var(--text-primary)' }}>AI Turn (Max)</strong>: The AI simulates its own decision, choosing the branch that maximizes its advantage.</li>
+                  <li><strong style={{ color: 'var(--accent-gold)' }}>Your Turn (Min)</strong>: The AI assumes you play perfectly, choosing the branch that minimizes the AI's advantage (which is best for you).</li>
+                </ul>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 25, textAlign: 'center' }}>
+              <button className="play-button" onClick={() => setShowGlossary(false)}>Got It</button>
             </div>
           </div>
         </div>
@@ -786,7 +859,7 @@ function App() {
         </div>
         <div>
           {hoveredNode ? (
-            <span>Analyzing: {getNotation(hoveredNode.move?.from[0], hoveredNode.move?.from[1])} → {getNotation(hoveredNode.move?.to[0], hoveredNode.move?.to[1])} | Score: <strong style={{ color: hoveredNode.score >= 0 ? '#5c8a5a' : '#a65c5c' }}>{hoveredNode.score}</strong></span>
+            <span>Simulating: {hoveredNode.move ? `${getNotation(hoveredNode.move.from[0], hoveredNode.move.from[1])} → ${getNotation(hoveredNode.move.to[0], hoveredNode.move.to[1])}` : 'None'} | Evaluation: <strong style={{ color: hoveredNode.score > 0 ? 'var(--text-primary)' : hoveredNode.score < 0 ? 'var(--accent-gold)' : 'var(--text-muted)' }}>{hoveredNode.score > 0 ? `+${hoveredNode.score}` : hoveredNode.score < 0 ? `${hoveredNode.score}` : 'Even'}</strong></span>
           ) : (
             "Hover over a dot or move to see the AI's logic"
           )}
