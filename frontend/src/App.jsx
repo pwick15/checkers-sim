@@ -51,9 +51,9 @@ const FutureMove = ({ move, label, theme }) => {
       {label || `${fromNot} → ${toNot}`}
       {hover && move.board && (
         <div className="mini-board-popup">
-          <div style={{ fontSize: '10px', marginBottom: '4px', color: '#fbc02d' }}>State after {fromNot}-{toNot}</div>
+          <div style={{ fontSize: '10px', marginBottom: '4px', color: 'var(--accent-gold)' }}>State after {fromNot}-{toNot}</div>
           <MiniBoard board={move.board} lastMove={{ from: move.from, to: move.to }} theme={theme} />
-          <div style={{ fontSize: '10px', marginTop: '4px', opacity: 0.8, color: move.score >= 0 ? '#e57373' : '#90caf9' }}>
+          <div style={{ fontSize: '10px', marginTop: '4px', opacity: 0.8, color: move.score >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}>
             Score: {move.score === 0 ? 'Even' : Math.abs(move.score)}
           </div>
         </div>
@@ -62,70 +62,7 @@ const FutureMove = ({ move, label, theme }) => {
   );
 };
 
-const CaptureTracker = ({ board }) => {
-  if (!board) return null;
 
-  let redPieces = 0;
-  let redKings = 0;
-  let blackPieces = 0;
-  let blackKings = 0;
-
-  board.forEach(row => {
-    row.forEach(p => {
-      if (p) {
-        if (p.color === 'red') {
-          if (p.is_king) redKings++;
-          else redPieces++;
-        } else {
-          if (p.is_king) blackKings++;
-          else blackPieces++;
-        }
-      }
-    });
-  });
-
-  const redCaptured = 12 - (blackPieces + blackKings);
-  const blackCaptured = 12 - (redPieces + redKings);
-
-  // Scoring advantage: Pieces=1, Kings=1.5 (similar to chess.com)
-  const redScore = (redPieces * 1) + (redKings * 1.5);
-  const blackScore = (blackPieces * 1) + (blackKings * 1.5);
-  const diff = redScore - blackScore;
-
-  return (
-    <div className="capture-tracker" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div className="player-side">
-          <div style={{ fontSize: 11, color: '#e57373', fontWeight: 'bold' }}>RED (YOU)</div>
-          <div className="piece-stack">
-            {Array.from({ length: redCaptured }).map((_, i) => (
-              <div key={i} className="mini-piece red captured" title="Captured Black Piece" />
-            ))}
-          </div>
-        </div>
-        {diff !== 0 && (
-          <div className="score-diff" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{
-              width: 10, height: 10, borderRadius: '50%',
-              background: diff > 0 ? '#e57373' : '#90caf9'
-            }}></div>
-            <span style={{ fontSize: 14, fontWeight: 'bold', color: diff > 0 ? '#e57373' : '#90caf9' }}>
-              {Math.abs(diff)}
-            </span>
-          </div>
-        )}
-        <div className="player-side" style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 11, color: '#90caf9', fontWeight: 'bold' }}>BLACK (AI)</div>
-          <div className="piece-stack" style={{ justifyContent: 'flex-end' }}>
-            {Array.from({ length: blackCaptured }).map((_, i) => (
-              <div key={i} className="mini-piece black captured" title="Captured Red Piece" />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 function App() {
   const [page, setPage] = useState('landing');
@@ -184,7 +121,7 @@ function App() {
       if (data.winner) {
         setStatus(`Game Over! ${data.winner.toUpperCase()} wins!`);
       } else {
-        setStatus(`${data.current_turn === 'red' ? "Red" : "Black"}'s turn`);
+        setStatus(`${data.current_turn === 'red' ? "White" : "Black"}'s turn`);
       }
       return data;
     } catch (e) {
@@ -366,6 +303,35 @@ function App() {
   // Backend provided parent_id, so we can trace back if we had an index.
   // For now, let's keep it simple: Show details in tooltip.
 
+  // Material advantage & capture calculations
+  let redPieces = 0;
+  let redKings = 0;
+  let blackPieces = 0;
+  let blackKings = 0;
+
+  if (board) {
+    board.forEach(row => {
+      row.forEach(p => {
+        if (p) {
+          if (p.color === 'red') {
+            if (p.is_king) redKings++;
+            else redPieces++;
+          } else {
+            if (p.is_king) blackKings++;
+            else blackPieces++;
+          }
+        }
+      });
+    });
+  }
+
+  const redCaptured = board ? 12 - (blackPieces + blackKings) : 0;
+  const blackCaptured = board ? 12 - (redPieces + redKings) : 0;
+
+  const redScore = (redPieces * 1) + (redKings * 1.5);
+  const blackScore = (blackPieces * 1) + (blackKings * 1.5);
+  const diff = redScore - blackScore;
+
   return (
     <div className={`app-container ${theme}-theme`}>
 
@@ -373,7 +339,7 @@ function App() {
       {page === 'landing' && (
         <div className="landing-page page">
           <h1>Checkers AI Simulator</h1>
-          <p style={{ fontSize: '18px', color: '#b8c5d6', margin: 0 }}>Watch the AI think through every possible move</p>
+          <p style={{ fontSize: '18px', color: 'var(--text-muted)', margin: 0 }}>Watch the AI think through every possible move</p>
 
           <div className="algorithm-selector">
             <div className={`algorithm-card ${algo === 'minimax' ? 'selected' : ''}`} onClick={() => setAlgo('minimax')}>
@@ -394,8 +360,25 @@ function App() {
         <div className="game-page">
           {/* LEFT: BOARD */}
           <div id="board-area">
-            <div id="board-header" style={{ width: 480, display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-              <div style={{ fontSize: 20, fontWeight: 'bold', color: currentTurn === 'red' ? '#e57373' : '#90caf9' }}>{status}</div>
+            <div id="board-header" style={{ width: 480, display: 'flex', justifyContent: 'center', marginBottom: 15 }}>
+              <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 500, color: currentTurn === 'red' ? 'var(--text-primary)' : 'var(--accent-gold)', letterSpacing: '0.5px' }}>{status}</div>
+            </div>
+
+            {/* BLACK (AI) PROFILE */}
+            <div style={{ width: 480, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 13 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>BLACK (AI)</span>
+                <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                  {Array.from({ length: blackCaptured }).map((_, i) => (
+                    <div key={i} className="mini-piece red captured" style={{ width: 12, height: 12, margin: 0 }} title="Captured White Piece" />
+                  ))}
+                </div>
+              </div>
+              {diff < 0 && (
+                <span style={{ fontWeight: 'bold', color: 'var(--accent-gold)', fontSize: 12 }}>
+                  +{Math.abs(diff)}
+                </span>
+              )}
             </div>
 
             <Board
@@ -407,7 +390,24 @@ function App() {
               theme={theme}
             />
 
-            <div className="controls-bar" style={{ width: 480, marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* WHITE (YOU) PROFILE */}
+            <div style={{ width: 480, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, fontSize: 13 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>WHITE (YOU)</span>
+                <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                  {Array.from({ length: redCaptured }).map((_, i) => (
+                    <div key={i} className="mini-piece black captured" style={{ width: 12, height: 12, margin: 0 }} title="Captured Black Piece" />
+                  ))}
+                </div>
+              </div>
+              {diff > 0 && (
+                <span style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: 12 }}>
+                  +{diff}
+                </span>
+              )}
+            </div>
+
+            <div className="controls-bar" style={{ width: 480, marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="control-btn" onClick={() => setPage('landing')}>Exit</button>
                 <button className="control-btn icon-btn" onClick={handleUndo} title="Undo Last Move">⟲</button>
@@ -425,7 +425,7 @@ function App() {
             {/* ANIMATION OVERLAY */}
             {isAnimating && exploredCount > 0 && exploredCount < (analysis?.total_explored || 0) && (
               <div className="animation-overlay">
-                <div style={{ color: '#fbc02d', fontWeight: 'bold', marginBottom: 5 }}>AI BRAINSTORMING</div>
+                <div style={{ color: 'var(--accent-gold)', fontWeight: 'bold', marginBottom: 5 }}>AI BRAINSTORMING</div>
                 <div style={{ fontSize: 12, opacity: 0.8 }}>{status}</div>
                 <div className="progress-bar-container">
                   <div className="progress-bar" style={{ width: `${(exploredCount / (analysis?.total_explored || 1)) * 100}%` }}></div>
@@ -436,12 +436,10 @@ function App() {
 
           {/* RIGHT: ANALYSIS */}
           <div id="analysis-panel">
-            <CaptureTracker board={board} />
-
             {/* TOP MOVES CARD */}
             {analysis && analysis.top_moves.length > 0 && (
               <div className="analysis-card">
-                <div className="analysis-header" style={{ color: '#fbc02d' }}>AI Strategy Analysis</div>
+                <div className="analysis-header" style={{ color: 'var(--accent-gold)' }}>AI Strategy Analysis</div>
                 <div className="top-moves-list">
                   {analysis.top_moves.map((m, i) => {
                     const rankLabel = ["Best Move", "2nd Best", "3rd Best"][i] || `Move ${i + 1}`;
@@ -475,7 +473,7 @@ function App() {
                         </div>
                         <div
                           className={`move-score clickable-score`}
-                          style={{ color: m.score >= 0 ? '#e57373' : '#90caf9', fontWeight: 'bold' }}
+                          style={{ color: m.score >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)', fontWeight: 'bold' }}
                           onClick={(e) => {
                             e.stopPropagation();
                             setExplainerNode(m);
@@ -491,7 +489,7 @@ function App() {
             )}
 
             {/* SEARCH GRID CARD */}
-            <div className="analysis-card" style={{ display: 'flex', flexDirection: 'column', position: 'relative', minHeight: '200px' }}>
+            <div className="analysis-card" style={{ display: 'flex', flexDirection: 'column', position: 'relative', flex: 1, minHeight: 0 }}>
               <div className="analysis-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Search Space ({exploredCount} / {analysis?.total_explored || 0})</span>
 
@@ -528,7 +526,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="grid-container" style={{ flex: 1, minHeight: 0 }}>
+              <div className="grid-container" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 <GridViz
                   analysis={analysis}
                   exploredCount={exploredCount}
@@ -541,10 +539,10 @@ function App() {
 
                 {/* LEGEND */}
                 <div className="legend">
-                  <div className="legend-item"><div className="dot explored" style={{ background: '#3949ab' }}></div> Explored (Max)</div>
-                  <div className="legend-item"><div className="dot explored" style={{ background: '#5c6bc0' }}></div> Explored (Min)</div>
-                  <div className="legend-item"><div className="dot pruned" style={{ background: '#444', border: '1px solid #777' }}></div> Pruned</div>
-                  <div className="legend-item"><div className="dot top-path" style={{ background: '#00e676' }}></div> Best Path</div>
+                  <div className="legend-item"><div className="dot explored-max"></div> Explored (Max)</div>
+                  <div className="legend-item"><div className="dot explored-min"></div> Explored (Min)</div>
+                  <div className="legend-item"><div className="dot pruned">×</div> Pruned</div>
+                  <div className="legend-item"><div className="dot top-path"></div> Best Path</div>
                 </div>
 
                 {/* TOOLTIP OVERLAY */}
@@ -573,7 +571,7 @@ function App() {
       <div className={`tree-slide-panel ${showTree ? 'open' : ''}`}>
         <div className="tree-header">
           <h2>
-            <div style={{ width: 10, height: 10, background: '#fbc02d', borderRadius: '50%', marginRight: 10 }}></div>
+            <div style={{ width: 10, height: 10, background: 'var(--accent-gold)', borderRadius: '50%', marginRight: 10 }}></div>
             Decision Tree Explorer
           </h2>
           <div className="tree-controls">
@@ -612,7 +610,7 @@ function App() {
       {explainerNode && (
         <div className="modal-overlay" onClick={() => setExplainerNode(null)}>
           <div className="modal-content explainer-modal" onClick={e => e.stopPropagation()}>
-            <h3 style={{ color: '#fbc02d' }}>Scoring Breakdown</h3>
+            <h3 style={{ color: 'var(--accent-gold)' }}>Scoring Breakdown</h3>
             <p style={{ fontSize: 13, color: '#999' }}>Detailed math for the state AFTER this move.</p>
 
             {explainerNode.score_breakdown ? (
@@ -621,13 +619,13 @@ function App() {
                 <div style={{ textAlign: 'center', marginBottom: 25 }}>
                   <div style={{ fontSize: 12, color: '#aaa', textTransform: 'uppercase', letterSpacing: '1px' }}>Current Prediction</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                    <div style={{ width: 12, height: 12, borderRadius: '50%', background: explainerNode.score >= 0 ? '#e57373' : '#90caf9' }}></div>
-                    <div style={{ fontSize: 32, fontWeight: 'bold', color: explainerNode.score >= 0 ? '#e57373' : '#90caf9' }}>
+                    <div style={{ width: 12, height: 12, borderRadius: '50%', background: explainerNode.score >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}></div>
+                    <div style={{ fontSize: 32, fontWeight: 'bold', color: explainerNode.score >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}>
                       {explainerNode.score === 0 ? "EVEN" : Math.abs(explainerNode.score)}
                     </div>
                   </div>
                   <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>
-                    {explainerNode.score > 0 ? "Red Advantage" : explainerNode.score < 0 ? "Black Advantage" : "Dynamic Equilibrium"}
+                    {explainerNode.score > 0 ? "White Advantage" : explainerNode.score < 0 ? "Black Advantage" : "Dynamic Equilibrium"}
                   </div>
                 </div>
 
@@ -651,7 +649,7 @@ function App() {
                         <div className="icon">♟️</div>
                         <div className="label">Material</div>
                         <div className="val-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: (explainerNode.score_breakdown.Pieces || 0) >= 0 ? '#e57373' : '#90caf9' }}></div>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: (explainerNode.score_breakdown.Pieces || 0) >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}></div>
                           <div className="val">{Math.abs(explainerNode.score_breakdown.Pieces || 0)}</div>
                         </div>
                       </div>
@@ -659,7 +657,7 @@ function App() {
                         <div className="icon">👑</div>
                         <div className="label">Kings</div>
                         <div className="val-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: (explainerNode.score_breakdown.Kings || 0) >= 0 ? '#e57373' : '#90caf9' }}></div>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: (explainerNode.score_breakdown.Kings || 0) >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}></div>
                           <div className="val">{Math.abs(explainerNode.score_breakdown.Kings || 0)}</div>
                         </div>
                       </div>
@@ -667,7 +665,7 @@ function App() {
                         <div className="icon">🛡️</div>
                         <div className="label">Safety</div>
                         <div className="val-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: (explainerNode.score_breakdown.Position || 0) >= 0 ? '#e57373' : '#90caf9' }}></div>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: (explainerNode.score_breakdown.Position || 0) >= 0 ? 'var(--text-primary)' : 'var(--accent-gold)' }}></div>
                           <div className="val">{Math.abs(explainerNode.score_breakdown.Position || 0)}</div>
                         </div>
                       </div>
@@ -697,8 +695,8 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div style={{ marginTop: 20, padding: 20, background: 'rgba(255,193,7,0.1)', borderRadius: 12, border: '1px solid #ffc107' }}>
-                <h4 style={{ margin: '0 0 10px 0', color: '#ffc107' }}>Hidden Strategy Node</h4>
+              <div style={{ marginTop: 20, padding: 20, background: 'rgba(255,193,7,0.1)', borderRadius: 12, border: '1px solid var(--accent-gold)' }}>
+                <h4 style={{ margin: '0 0 10px 0', color: 'var(--accent-gold)' }}>Hidden Strategy Node</h4>
                 <p style={{ margin: 0, fontSize: 14, color: '#ddd', lineHeight: 1.5 }}>
                   The AI didn't calculate the local math for this specific dot to save speed. Instead, it "inherited" the score from the best future move it found further down this path.
                 </p>
@@ -740,7 +738,7 @@ function App() {
         </div>
         <div>
           {hoveredNode ? (
-            <span>Analyzing: {getNotation(hoveredNode.move?.from[0], hoveredNode.move?.from[1])} → {getNotation(hoveredNode.move?.to[0], hoveredNode.move?.to[1])} | Score: <strong style={{ color: hoveredNode.score >= 0 ? '#4caf50' : '#f44336' }}>{hoveredNode.score}</strong></span>
+            <span>Analyzing: {getNotation(hoveredNode.move?.from[0], hoveredNode.move?.from[1])} → {getNotation(hoveredNode.move?.to[0], hoveredNode.move?.to[1])} | Score: <strong style={{ color: hoveredNode.score >= 0 ? '#5c8a5a' : '#a65c5c' }}>{hoveredNode.score}</strong></span>
           ) : (
             "Hover over a dot or move to see the AI's logic"
           )}

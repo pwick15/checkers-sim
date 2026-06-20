@@ -120,11 +120,11 @@ const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId }) =
                         let opacity = 0.4;
 
                         if (inPath) {
-                            stroke = '#00e676';
+                            stroke = '#b38b59'; // Muted brass
                             width = 3;
                             opacity = 1;
                         } else if (isBest) {
-                            stroke = l.target.branch_rank === 0 ? '#00e676' : '#388e3c';
+                            stroke = l.target.branch_rank === 0 ? '#b38b59' : '#8c8279';
                             width = 1.5;
                             opacity = 0.7;
                         }
@@ -146,17 +146,17 @@ const TreeView = ({ tree, onClose, width = 800, height = 600, highlightedId }) =
                         const inPath = highlightPath.has(n.id);
                         const isTop = n.branch_rank !== undefined && n.branch_rank >= 0 && n.branch_rank < 3;
 
-                        let fill = '#444';
+                        let fill = '#3e2723';
                         let r = 5;
 
-                        if (n.score > 0) fill = '#4caf50';
-                        else if (n.score < 0) fill = '#f44336';
+                        if (n.score > 0) fill = '#e6dfd1'; // Ivory advantage
+                        else if (n.score < 0) fill = '#2b221e'; // Brown advantage
 
-                        // Best nodes in Green variants
+                        // Best nodes
                         if (isTop) {
-                            if (n.branch_rank === 0) fill = '#00e676';
-                            else if (n.branch_rank === 1) fill = '#66bb6a';
-                            else if (n.branch_rank === 2) fill = '#a5d6a7';
+                            if (n.branch_rank === 0) fill = '#b38b59';
+                            else if (n.branch_rank === 1) fill = '#cca472';
+                            else if (n.branch_rank === 2) fill = '#8c8279';
                             r = 7;
                         }
 

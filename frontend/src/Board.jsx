@@ -2,27 +2,27 @@ import React, { useRef, useEffect, useState } from 'react';
 
 const SQUARE_SIZE = 480 / 8;
 const LIGHT_COLORS = {
-    boardLight: "#f6e9d5",
-    boardDark: "#8b5a2b",
-    redPiece: "#d63c24",
-    blackPiece: "#1c1c1c",
-    king: "#fbc02d",
-    validMove: "rgba(46, 125, 50, 0.5)",
-    selected: "rgba(255, 193, 7, 0.5)",
-    dragSource: "rgba(255, 255, 255, 0.2)",
-    lastMove: "rgba(255, 235, 59, 0.3)"
+    boardLight: "#e6dfd1",
+    boardDark: "#a08c78",
+    redPiece: "#f2e8d5",
+    blackPiece: "#2b221e",
+    king: "#8c6838",
+    validMove: "rgba(140, 104, 56, 0.4)",
+    selected: "rgba(255, 255, 255, 0.4)",
+    dragSource: "rgba(0, 0, 0, 0.1)",
+    lastMove: "rgba(140, 104, 56, 0.2)"
 };
 
 const DARK_COLORS = {
-    boardLight: "#2a303e",
-    boardDark: "#1a1e26",
-    redPiece: "#e57373",
-    blackPiece: "#333", // Slightly lighter for better visibility
-    king: "#fbc02d",
-    validMove: "rgba(46, 125, 50, 0.4)",
-    selected: "rgba(251, 192, 45, 0.3)",
-    dragSource: "rgba(255, 255, 255, 0.1)",
-    lastMove: "rgba(251, 192, 45, 0.2)"
+    boardLight: "#c4b7a6", // Muted birch
+    boardDark: "#4a3b32",  // Muted walnut
+    redPiece: "#f2e8d5",   // Ivory (internally 'red')
+    blackPiece: "#2b221e", // Dark brown (internally 'black')
+    king: "#b38b59",       // Muted brass
+    validMove: "rgba(179, 139, 89, 0.4)", // Brass highlight
+    selected: "rgba(255, 255, 255, 0.25)",
+    dragSource: "rgba(0, 0, 0, 0.2)",
+    lastMove: "rgba(179, 139, 89, 0.2)"
 };
 
 export default function Board({ board, validMoves = [], selectedPiece, lastMove, theme = 'dark', onSquareClick }) {
@@ -110,27 +110,31 @@ export default function Board({ board, validMoves = [], selectedPiece, lastMove,
 
         ctx.fillStyle = piece.color === 'red' ? COLORS.redPiece : COLORS.blackPiece;
 
-        // Add subtle stroke for black pieces in dark mode to make them pop
-        if (piece.color === 'black' && theme === 'dark') {
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-            ctx.lineWidth = 2;
-        } else {
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
-            ctx.lineWidth = 1;
-        }
+        // Clean border
+        ctx.strokeStyle = piece.color === 'red' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(0, 0, 0, 0.6)';
+        ctx.lineWidth = 1;
 
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        // Soft drop shadow
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
         ctx.shadowBlur = 4;
+        ctx.shadowOffsetY = 2;
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
-        ctx.stroke(); // Add stroke
+        ctx.stroke();
         ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        // Inner elegant ridge
+        ctx.beginPath();
+        ctx.arc(x, y, radius - 4, 0, Math.PI * 2);
+        ctx.strokeStyle = piece.color === 'red' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
+        ctx.stroke();
 
         if (piece.is_king) {
             ctx.fillStyle = COLORS.king;
             ctx.beginPath();
-            ctx.arc(x, y, radius / 2, 0, Math.PI * 2);
+            ctx.arc(x, y, radius / 2.5, 0, Math.PI * 2);
             ctx.fill();
         }
     }

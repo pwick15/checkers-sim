@@ -111,6 +111,16 @@ export default function GridViz({
 
         const { positions, dotSize } = layout;
 
+        // Fetch theme colors dynamically from CSS variables on the canvas / ancestor
+        const style = window.getComputedStyle(canvas);
+        const colorMax = style.getPropertyValue('--max-node-color').trim() || '#3e2723';
+        const colorMin = style.getPropertyValue('--min-node-color').trim() || '#4a3b32';
+        const colorPruned = style.getPropertyValue('--pruned-node-color').trim() || '#2b221e';
+        const colorPrunedBorder = style.getPropertyValue('--pruned-border-color').trim() || '#18120f';
+        const accentGold = style.getPropertyValue('--accent-gold').trim() || '#b38b59';
+        const accentGoldHover = style.getPropertyValue('--accent-gold-hover').trim() || '#cca472';
+        const textMuted = style.getPropertyValue('--text-muted').trim() || '#8c8279';
+
         positions.forEach((p, i) => {
             const isExplored = i < exploredCount;
             if (!isExplored) {
@@ -129,18 +139,15 @@ export default function GridViz({
 
             // Color Logic
             if (isPruned) {
-                ctx.fillStyle = '#444';
+                ctx.fillStyle = colorPruned;
             } else if (isTop) {
-                // User requested Best Nodes = Green
-                if (p.node.branch_rank === 0) ctx.fillStyle = '#00e676'; // Bright Green (Best)
-                else if (p.node.branch_rank === 1) ctx.fillStyle = '#66bb6a'; // Medium Green
-                else if (p.node.branch_rank === 2) ctx.fillStyle = '#a5d6a7'; // Light Green
-                else ctx.fillStyle = '#4caf50';
+                if (p.node.branch_rank === 0) ctx.fillStyle = accentGold;
+                else if (p.node.branch_rank === 1) ctx.fillStyle = accentGoldHover;
+                else ctx.fillStyle = textMuted;
             } else {
-                // Standard Explored Nodes - Neutral Blue/Grey
-                // Differentiate Max vs Min layers nicely
-                if (p.node.depth % 2 === 0) ctx.fillStyle = '#3949ab'; // Indigo (Max)
-                else ctx.fillStyle = '#5c6bc0'; // Lighter Indigo (Min)
+                // Standard Explored Nodes - Differentiate Max vs Min layers nicely
+                if (p.node.depth % 2 === 0) ctx.fillStyle = colorMax;
+                else ctx.fillStyle = colorMin;
             }
 
             // Hover highlight
@@ -158,7 +165,7 @@ export default function GridViz({
 
             // Draw X for pruned
             if (isPruned) {
-                ctx.strokeStyle = '#d32f2f'; // Red X for prune cutoff
+                ctx.strokeStyle = colorPrunedBorder;
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 const r = dotSize / 2;

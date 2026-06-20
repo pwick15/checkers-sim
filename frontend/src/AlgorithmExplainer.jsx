@@ -55,7 +55,7 @@ const AlgorithmExplainer = ({ algo, onStart, onSkip }) => {
         <div className="explainer-overlay">
             <div className="explainer-container">
                 <div className="explainer-content">
-                    <div className="explainer-badge">{algo === 'minimax' ? 'Strategy Guide' : 'Optimization Guide'}</div>
+                    <div className="explainer-badge">{algo === 'minimax' ? 'Strategy Guide' : 'Algorithm Details'}</div>
                     <h2>{currentSlide.title}</h2>
                     <p className="explainer-text">{currentSlide.text}</p>
 
