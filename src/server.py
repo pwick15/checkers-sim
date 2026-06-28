@@ -259,6 +259,33 @@ async def get_valid_moves(game_id: str, row: int, col: int):
 
     return {"moves": destinations}
 
+# Serve static frontend files
+frontend_dist_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+
+if os.path.exists(frontend_dist_path):
+    # Serve compiled static assets
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist_path, "assets")), name="assets")
+    
+    # Serve root level files like vite.svg
+    @app.get("/vite.svg")
+    async def serve_vite_svg():
+        vite_svg_path = os.path.join(frontend_dist_path, "vite.svg")
+        if os.path.exists(vite_svg_path):
+            return FileResponse(vite_svg_path)
+        raise HTTPException(status_code=404)
+
+    # Catch-all route to serve the React SPA index.html
+    @app.get("/{catchall:path}")
+    async def serve_frontend(catchall: str):
+        if catchall.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        
+        index_path = os.path.join(frontend_dist_path, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        raise HTTPException(status_code=404)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
